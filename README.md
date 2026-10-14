@@ -16,16 +16,25 @@ The point of this program is to be able to launch a program that can store words
 - **Sorting**: newest/oldest, A→Z/Z→A, or grouped by part of speech, with an optional "Favorites first" toggle. Search covers words, notes, titles and authors.
 - **Appearance**: light, dark or system theme; accent color; serif, sans or mono font; text size; card or compact layout.
 
-## Setup
+## Install (Windows)
 
-Requires [Node.js](https://nodejs.org) 20 or newer.
+Download **Word-Collector-Setup-x.y.z.exe** from the [latest release](https://github.com/KaiyoDino/wordcollector/releases/latest) and run it. Then open Settings and add your free Merriam-Webster keys (see below).
+
+- Windows may say "Windows protected your PC", because the installer isn't code-signed. Click **More info → Run anyway**.
+- The app updates itself. When a new version has downloaded, a bar at the top says it's ready; click **Restart to update**, or it installs the next time you quit.
+- Your library is kept in `%APPDATA%\Word Collector` and survives updates and uninstalling.
+
+## Run from source
+
+Requires [Node.js](https://nodejs.org) 22 or newer.
 
 ```sh
 npm install
-npm start
+npm start          # web version in your browser
+npm run desktop    # the desktop app, in its own window
 ```
 
-`npm start` opens the app at http://localhost:5173. Your library is saved in `data/wordcollector.sqlite`, which is never committed.
+`npm start` opens the app at http://localhost:5173. Both commands use the library in `data/wordcollector.sqlite`, which is never committed.
 
 ### Merriam-Webster API keys (free)
 
@@ -39,7 +48,7 @@ Without keys the app still runs, but no definitions or synonyms are filled in. Y
 
 ## Sharing
 
-Anyone can clone this repo and run it with the steps above. Each person uses their own free Merriam-Webster keys, and each person's library stays on their own computer. To move a library between computers, use **Settings → Export backup (JSON)** and **Import backup…**.
+The easiest way to share is the installer: send people the [latest release page](https://github.com/KaiyoDino/wordcollector/releases/latest). Anyone can also clone this repo and run it from source. Each person uses their own free Merriam-Webster keys, and each person's library stays on their own computer. To move a library between computers, use **Settings → Export backup (JSON)** and **Import backup…**.
 
 ## Keyboard shortcuts
 
@@ -60,8 +69,21 @@ server/
   routes/api.js       REST API
   lookup/             Merriam-Webster dictionary + thesaurus clients and markup cleanup
 public/               Frontend (plain HTML/CSS/JS modules, no build step)
+electron/             Desktop app: window, auto-updates, preload bridge
+scripts/              build.mjs (installer) and release.mjs (GitHub Release)
+build/                App icon
 ```
 
-### Desktop app later
+## Releasing an update
 
-The server runs on Node with no native modules, so wrapping it in Electron needs no extra build step. In Electron's main process, call `startServer({ port: 0, dataDir: app.getPath('userData') })`, then load the returned `url` in a `BrowserWindow`.
+Installed copies check this repo's GitHub Releases at startup and every few hours. To ship a new version:
+
+```sh
+npm version patch        # 1.0.0 -> 1.0.1 (use minor or major for bigger changes); commits and tags
+git push --follow-tags
+npm run release          # builds the installer and publishes it as a GitHub Release
+```
+
+`npm run release` needs the [GitHub CLI](https://cli.github.com) signed in (`gh auth login`). It refuses to run with uncommitted or unpushed changes, so a release always matches the code on GitHub. To build the installer without publishing, run `npm run dist`. When this folder is inside OneDrive, the output goes to `%LOCALAPPDATA%\WordCollector-build`, so OneDrive doesn't sync (and lock) about 300 MB of build files.
+
+The desktop wrapper is `electron/`: `main.js` starts the same server as `npm start` and opens it in a window; `updater.js` handles updates; `preload.cjs` gives the page a small, fixed API for update controls.

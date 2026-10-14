@@ -423,3 +423,11 @@ body.no-scroll { overflow: hidden; }
 .key-message { font-family: var(--font-ui); font-size: 0.82rem; color: var(--text-muted); align-self: center; }
 .key-message.error { color: var(--danger); }
 .modal .hint a { color: var(--accent-strong); }
+
+/* Desktop app updates */
+.update-banner {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; justify-content: center;
+  padding: 0.55rem 1rem; background: var(--accent-soft); border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui); font-size: 0.875rem;
+}
+.app-updates .button-row { align-items: center; justify-content: space-between; }

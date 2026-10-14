@@ -56,6 +56,12 @@
     </div>
   </header>
 
+  <div id="update-banner" class="update-banner" role="status" hidden>
+    <span id="update-banner-text"></span>
+    <button id="update-restart" class="btn primary small" type="button">Restart to update</button>
+    <button id="update-later" class="btn ghost small" type="button">Later</button>
+  </div>
+
   <main>
     <p id="count" class="count" aria-live="polite"></p>
     <div id="list" class="word-list"></div>
@@ -151,6 +157,14 @@
         <div class="button-row">
           <button class="btn" id="keys-save" type="button">Save keys</button>
           <span id="keys-message" class="key-message" role="status"></span>
+        </div>
+      </fieldset>
+      <fieldset class="app-updates" id="updates-section" hidden>
+        <legend>App updates</legend>
+        <p class="hint">New versions download in the background and install when you restart the app.</p>
+        <div class="button-row">
+          <span id="update-status" class="key-message"></span>
+          <button class="btn small" id="update-check" type="button">Check for updates</button>
         </div>
       </fieldset>
       <fieldset class="library">

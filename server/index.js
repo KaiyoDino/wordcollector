@@ -9,20 +9,31 @@ import { createApiRouter } from './routes/api.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Starts the app and resolves to its URL. A desktop wrapper (Electron) can call this
-// with its own dataDir, e.g. app.getPath('userData'), then load the URL in a window.
+// Starts the app and resolves to its URL. The desktop app (electron/main.js) calls this
+// with its own dataDir, then loads the URL in a window.
 export async function startServer({ port = 5173, dataDir = path.join(ROOT, 'data') } = {}) {
   const db = await openDatabase(dataDir);
   const settings = createSettingsStore(db);
   const app = express();
   app.disable('x-powered-by');
+
+  // Only answer requests addressed to this machine, so a web page can't reach the
+  // library through a DNS-rebinding trick.
+  let allowedHosts = new Set();
+  app.use((req, res, next) => {
+    if (allowedHosts.has(req.headers.host)) return next();
+    res.status(403).type('text/plain').send('Forbidden');
+  });
+
   app.use('/api', createApiRouter({ words: createWordStore(db), settings }));
   app.use(express.static(path.join(ROOT, 'public')));
 
   const server = await listen(app, port);
+  const actual = server.address().port;
+  allowedHosts = new Set([`localhost:${actual}`, `127.0.0.1:${actual}`]);
   const hasKeys = Boolean((settings.get('mw_collegiate_key') || process.env.MW_COLLEGIATE_KEY)
     && (settings.get('mw_thesaurus_key') || process.env.MW_THESAURUS_KEY));
-  return { url: `http://localhost:${server.address().port}`, server, hasKeys };
+  return { url: `http://localhost:${actual}`, server, hasKeys };
 }
 
 // Binds to localhost only; tries the next port if one is taken.

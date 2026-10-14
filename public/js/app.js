@@ -5,6 +5,7 @@ import { initWordView, openWord, currentWordId } from './wordView.js';
 import { initAddDialog, openAddDialog } from './addDialog.js';
 import { initReview, openReview } from './review.js';
 import { initBackup } from './backup.js';
+import './desktop.js';
 
 const list = document.getElementById('list');
 const count = document.getElementById('count');
