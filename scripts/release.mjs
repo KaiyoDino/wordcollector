@@ -18,9 +18,11 @@ const fail = (message) => {
   console.error(`\n✖ ${message}\n`);
   process.exit(1);
 };
+// No shell: arguments with spaces (the title, notes, paths) are passed through intact.
 const run = (cmd, args) => {
-  const result = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
-  if (result.status !== 0) fail(`${cmd} ${args.join(' ')} failed`);
+  const result = spawnSync(cmd, args, { stdio: 'inherit' });
+  if (result.error?.code === 'ENOENT') fail(`${cmd} isn’t installed (see README → "Releasing an update")`);
+  if (result.status !== 0) fail(`${cmd} ${args[0]} ${args[1] ?? ''} failed`);
 };
 
 // 1. The release must match exactly what's on GitHub.
@@ -31,7 +33,8 @@ let upstream;
 try { upstream = git('rev-parse', '@{u}'); } catch { fail('This branch isn’t pushed to GitHub yet. Run: git push -u origin HEAD'); }
 if (head !== upstream) fail('Your latest commits aren’t on GitHub yet. Run: git push --follow-tags');
 
-const existing = spawnSync('gh', ['release', 'view', tag, '--repo', `${owner}/${repo}`], { stdio: 'ignore', shell: process.platform === 'win32' });
+const existing = spawnSync('gh', ['release', 'view', tag, '--repo', `${owner}/${repo}`], { stdio: 'ignore' });
+if (existing.error?.code === 'ENOENT') fail('The GitHub CLI (gh) isn’t installed. Get it at https://cli.github.com, then run: gh auth login');
 if (existing.status === 0) {
   fail(`Release ${tag} already exists. Bump the version first: npm version patch (then git push --follow-tags)`);
 }

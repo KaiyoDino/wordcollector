@@ -22,8 +22,10 @@ export function build() {
   console.log(`Building into ${out}\n`);
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  const result = spawnSync('npx', ['electron-builder', '--win', '--publish', 'never', `--config.directories.output=${out}`], {
-    stdio: 'inherit', env, shell: process.platform === 'win32',
+  // Run the CLI with this Node directly (no shell), so paths with spaces stay intact.
+  const cli = path.resolve('node_modules', 'electron-builder', 'cli.js');
+  const result = spawnSync(process.execPath, [cli, '--win', '--publish', 'never', `--config.directories.output=${out}`], {
+    stdio: 'inherit', env,
   });
   if (result.status !== 0) process.exit(result.status ?? 1);
   return out;
