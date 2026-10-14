@@ -1,0 +1,74 @@
+/* Design tokens. Themes switch by redefining these variables. */
+:root {
+  --accent: #C96442;
+  --font-size: 16px;
+
+  --bg: #F5F4EE;
+  --surface: #FFFFFF;
+  --surface-2: #FAF9F5;
+  --text: #29261F;
+  --text-muted: #6E6A5E;
+  --text-faint: #9A9588;
+  --border: #E5E1D6;
+  --border-strong: #D3CEC0;
+  --shadow: 0 1px 2px rgb(41 38 31 / 0.05), 0 4px 16px rgb(41 38 31 / 0.06);
+  --shadow-lg: 0 12px 48px rgb(41 38 31 / 0.18);
+  --scrim: rgb(41 38 31 / 0.28);
+  --star: #D9A53A;
+  --danger: #B5462F;
+
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --accent-strong: color-mix(in srgb, var(--accent) 82%, black);
+  --on-accent: #FFFFFF;
+
+  --font-serif: "Tiempos Text", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --font-sans: "Styrene A", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --font-body: var(--font-serif);
+  --font-ui: var(--font-sans);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #262624;
+    --surface: #30302D;
+    --surface-2: #2B2B28;
+    --text: #EEEBE2;
+    --text-muted: #B0AB9E;
+    --text-faint: #858174;
+    --border: #3E3D38;
+    --border-strong: #514F48;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 4px 16px rgb(0 0 0 / 0.2);
+    --shadow-lg: 0 12px 48px rgb(0 0 0 / 0.5);
+    --scrim: rgb(0 0 0 / 0.5);
+    --danger: #E07A62;
+    --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    --accent-strong: color-mix(in srgb, var(--accent) 80%, white);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #262624;
+  --surface: #30302D;
+  --surface-2: #2B2B28;
+  --text: #EEEBE2;
+  --text-muted: #B0AB9E;
+  --text-faint: #858174;
+  --border: #3E3D38;
+  --border-strong: #514F48;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 4px 16px rgb(0 0 0 / 0.2);
+  --shadow-lg: 0 12px 48px rgb(0 0 0 / 0.5);
+  --scrim: rgb(0 0 0 / 0.5);
+  --danger: #E07A62;
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  --accent-strong: color-mix(in srgb, var(--accent) 80%, white);
+  color-scheme: dark;
+}
+
+:root[data-font="sans"] { --font-body: var(--font-sans); }
+:root[data-font="mono"] { --font-body: var(--font-mono); --font-ui: var(--font-mono); }

@@ -1,0 +1,20 @@
+{
+  "name": "wordcollector",
+  "version": "0.1.0",
+  "description": "A personal word library with automatic dictionary definitions.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js --no-open"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "sql.js": "^1.12.0"
+  }
+}

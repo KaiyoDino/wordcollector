@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Word Collector</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23C96442'/><text x='16' y='22' font-family='Georgia,serif' font-size='18' fill='white' text-anchor='middle'>W</text></svg>">
+  <script>
+    // Apply saved appearance before first paint to avoid a flash of the default theme.
+    try {
+      const s = JSON.parse(localStorage.getItem('wc.settings') || '{}');
+      const r = document.documentElement;
+      if (s.theme && s.theme !== 'system') r.dataset.theme = s.theme;
+      if (s.font) r.dataset.font = s.font;
+      if (s.density) r.dataset.density = s.density;
+      if (s.accent) r.style.setProperty('--accent', s.accent);
+      if (s.fontSize) r.style.setProperty('--font-size', s.fontSize + 'px');
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="styles/theme.css">
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">W</span>
+      <h1>Word Collector</h1>
+    </div>
+    <div class="toolbar">
+      <label class="search">
+        <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="search" type="search" placeholder="Search words and notes" aria-label="Search words and notes" autocomplete="off">
+      </label>
+      <select id="sort" aria-label="Sort words">
+        <option value="date">Newest first</option>
+        <option value="date_asc">Oldest first</option>
+        <option value="alpha">A → Z</option>
+        <option value="alpha_desc">Z → A</option>
+        <option value="pos">Part of speech</option>
+      </select>
+      <select id="tag-filter" aria-label="Filter by tag" hidden>
+        <option value="">All tags</option>
+      </select>
+      <button id="fav-first" class="btn ghost toggle" type="button" aria-pressed="false" title="Show favorites first">
+        <svg class="icon" aria-hidden="true"><use href="#i-star"/></svg><span>Favorites first</span>
+      </button>
+      <button id="open-review" class="btn ghost" type="button" title="Review with flashcards">
+        <svg class="icon" aria-hidden="true"><use href="#i-cards"/></svg><span>Review</span>
+      </button>
+      <button id="open-settings" class="btn ghost icon-only" type="button" title="Settings" aria-label="Settings">
+        <svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg>
+      </button>
+      <button id="open-add" class="btn primary" type="button">
+        <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>Add word</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <p id="count" class="count" aria-live="polite"></p>
+    <div id="list" class="word-list"></div>
+  </main>
+
+  <!-- Word detail drawer -->
+  <aside id="drawer" class="drawer" aria-hidden="true" aria-labelledby="drawer-title">
+    <div class="drawer-inner" id="drawer-content"></div>
+  </aside>
+  <div id="scrim" class="scrim" hidden></div>
+
+  <!-- Add word -->
+  <dialog id="add-dialog" class="modal" aria-labelledby="add-title">
+    <form id="add-form" method="dialog" class="modal-body">
+      <div class="modal-head">
+        <h2 id="add-title">Add a word</h2>
+        <button class="btn ghost icon-only" type="button" data-close aria-label="Close">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="add-row">
+        <input id="add-term" name="term" type="text" placeholder="Type a word…" autocomplete="off" spellcheck="false" maxlength="100" required>
+        <button id="add-lookup" class="btn" type="submit" value="lookup">Look up</button>
+      </div>
+      <div id="add-preview" class="preview" aria-live="polite"></div>
+      <div class="modal-foot">
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button id="add-save" class="btn primary" type="button" disabled>Add to library</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Appearance -->
+  <dialog id="settings-dialog" class="modal" aria-labelledby="settings-title">
+    <form method="dialog" class="modal-body">
+      <div class="modal-head">
+        <h2 id="settings-title">Settings</h2>
+        <button class="btn ghost icon-only" value="close" aria-label="Close">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <fieldset>
+        <legend>Theme</legend>
+        <div class="segmented" data-setting="theme">
+          <button type="button" value="system">System</button>
+          <button type="button" value="light">Light</button>
+          <button type="button" value="dark">Dark</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Accent color</legend>
+        <div class="swatches" id="swatches"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Font</legend>
+        <div class="segmented" data-setting="font">
+          <button type="button" value="serif">Serif</button>
+          <button type="button" value="sans">Sans</button>
+          <button type="button" value="mono">Mono</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Text size <output id="font-size-out"></output></legend>
+        <input id="font-size" type="range" min="14" max="20" step="1" aria-label="Text size">
+      </fieldset>
+      <fieldset>
+        <legend>Layout</legend>
+        <div class="segmented" data-setting="density">
+          <button type="button" value="cards">Cards</button>
+          <button type="button" value="compact">Compact list</button>
+        </div>
+      </fieldset>
+      <fieldset class="keys" id="keys-section">
+        <legend>Merriam-Webster API keys</legend>
+        <p class="hint">Definitions and synonyms come from Merriam-Webster. Get two free keys at
+          <a href="https://dictionaryapi.com/register/index" target="_blank" rel="noopener noreferrer">dictionaryapi.com</a>
+          by requesting the <strong>Collegiate Dictionary</strong> and <strong>Collegiate Thesaurus</strong> APIs.
+          Keys are stored only on this computer.</p>
+        <label class="key-field">
+          <span>Dictionary key <em class="key-status" data-key-status="collegiate"></em></span>
+          <span class="key-row">
+            <input class="field" type="password" data-key="collegiate" autocomplete="off" spellcheck="false" maxlength="100" placeholder="Paste your Collegiate Dictionary key">
+            <button class="btn ghost small" type="button" data-key-remove="collegiate" hidden>Remove</button>
+          </span>
+        </label>
+        <label class="key-field">
+          <span>Thesaurus key <em class="key-status" data-key-status="thesaurus"></em></span>
+          <span class="key-row">
+            <input class="field" type="password" data-key="thesaurus" autocomplete="off" spellcheck="false" maxlength="100" placeholder="Paste your Collegiate Thesaurus key">
+            <button class="btn ghost small" type="button" data-key-remove="thesaurus" hidden>Remove</button>
+          </span>
+        </label>
+        <div class="button-row">
+          <button class="btn" id="keys-save" type="button">Save keys</button>
+          <span id="keys-message" class="key-message" role="status"></span>
+        </div>
+      </fieldset>
+      <fieldset class="library">
+        <legend>Library backup</legend>
+        <p class="hint">Your words are stored only on this computer. Export a backup now and then.</p>
+        <div class="button-row">
+          <a class="btn" id="export-json" download>Export backup (JSON)</a>
+          <a class="btn" id="export-csv" download>Export spreadsheet (CSV)</a>
+          <button class="btn" id="import-backup" type="button">Import backup…</button>
+          <input id="import-file" type="file" accept=".json,application/json" hidden>
+        </div>
+      </fieldset>
+      <div class="modal-foot">
+        <button id="settings-reset" class="btn ghost" type="button">Reset to defaults</button>
+        <button class="btn primary" value="close">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Flashcard review -->
+  <div id="review" class="review" role="dialog" aria-modal="true" aria-labelledby="review-title" hidden>
+    <div class="review-top">
+      <h2 id="review-title">Review</h2>
+      <span id="review-progress" class="meta"></span>
+      <button id="review-close" class="btn ghost icon-only" type="button" aria-label="Exit review">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="review-body" class="review-body"></div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" fill="var(--star-fill, none)" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M5 9v6h4l5 4V5L9 9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></g></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 4h12a2 2 0 0 1 2 2v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    </defs>
+  </svg>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
