@@ -1,19 +1,36 @@
 import express from 'express';
-import { lookupWord, clearLookupCache } from '../lookup/index.js';
+import { lookupWord, clearLookupCache, kindOf } from '../lookup/index.js';
 import { testKey } from '../lookup/merriamWebster.js';
-import { USER_SOURCE, MAX_TAGS_PER_WORD, MAX_TAG_LENGTH } from '../words.js';
+import { USER_SOURCE, MAX_TAGS_PER_WORD, MAX_TAG_LENGTH, normalizePosFilter } from '../words.js';
 import { toBackup, toCsv, parseBackup, BackupError } from '../backup.js';
+import { explainDifference, testAnthropicKey } from '../ai.js';
 
 const MAX_TERM = 100;
 const MAX_TEXT = 5000;
-const SETTINGS_KEYS = new Set(['theme', 'accent', 'font', 'fontSize', 'density', 'sort', 'favFirst']);
+const SETTINGS_KEYS = new Set(['theme', 'accent', 'font', 'fontSize', 'density', 'sort', 'favFirst', 'kind']);
+const KINDS = new Set(['word', 'phrase']);
 
-// Merriam-Webster keys: saved in the app's settings table (never sent to the browser), else .env.
-const MW_KEYS = {
-  collegiate: { setting: 'mw_collegiate_key', env: 'MW_COLLEGIATE_KEY', label: 'Dictionary' },
-  thesaurus: { setting: 'mw_thesaurus_key', env: 'MW_THESAURUS_KEY', label: 'Thesaurus' },
+// API keys: saved in the app's settings table (never sent to the browser), else .env.
+// Each is checked with its service before it's saved.
+const API_KEYS = {
+  collegiate: {
+    setting: 'mw_collegiate_key', env: 'MW_COLLEGIATE_KEY', label: 'Dictionary',
+    test: (key) => testKey('collegiate', key),
+    rejected: 'Merriam-Webster didn’t accept this Dictionary key. Check that it’s your Collegiate Dictionary key.',
+  },
+  thesaurus: {
+    setting: 'mw_thesaurus_key', env: 'MW_THESAURUS_KEY', label: 'Thesaurus',
+    test: (key) => testKey('thesaurus', key),
+    rejected: 'Merriam-Webster didn’t accept this Thesaurus key. Check that it’s your Collegiate Thesaurus key.',
+  },
+  anthropic: {
+    setting: 'anthropic_key', env: 'ANTHROPIC_API_KEY', label: 'Anthropic',
+    test: testAnthropicKey,
+    rejected: 'Anthropic didn’t accept this API key. Copy it again from console.anthropic.com.',
+  },
 };
-const MAX_KEY = 100;
+const MAX_COMPARE_SYNONYMS = 60;
+const MAX_KEY = 200;
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -58,13 +75,22 @@ function cleanTags(raw) {
 
 const listFilter = (query) => ({
   tag: String(query.tag ?? '').trim().slice(0, MAX_TAG_LENGTH),
+  kind: KINDS.has(query.kind) ? query.kind : '',
 });
+
+function cleanPartsOfSpeech(raw) {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) throw new HttpError(400, 'Parts of speech must be a list');
+  return raw.map((p) => String(p ?? '').trim().slice(0, 40)).filter(Boolean).slice(0, 20);
+}
+
+const uniqueValues = (items) => [...new Map(items.map((r) => [r.value.toLowerCase(), r.value])).values()];
 
 export function createApiRouter({ words, settings }) {
   const router = express.Router();
 
   function keyInfo(name) {
-    const { setting, env } = MW_KEYS[name];
+    const { setting, env } = API_KEYS[name];
     const saved = settings.get(setting);
     const value = saved || process.env[env] || '';
     return { value, source: saved ? 'app' : value ? 'env' : null };
@@ -117,9 +143,19 @@ export function createApiRouter({ words, settings }) {
   router.post('/words', wrap(async (req, res) => {
     const term = cleanTerm(req.body?.term);
     const existing = words.findByTerm(term);
-    if (existing) return res.status(409).json({ error: 'That word is already in your library', id: existing.id });
+    if (existing) return res.status(409).json({ error: `“${term}” is already in your library`, id: existing.id });
+    const body = req.body ?? {};
+    const extras = {
+      notes: cleanText(body.notes, 'Notes'),
+      found_title: cleanText(body.found_title, 'Title', { max: 300 }),
+      found_author: cleanText(body.found_author, 'Author', { max: 200 }),
+      found_page: cleanText(body.found_page, 'Page', { max: 40 }),
+      tags: cleanTags(body.tags),
+    };
+    const chosen = cleanPartsOfSpeech(body.parts_of_speech);
     const lookup = await lookupWord(term, { keys: currentKeys() });
-    res.status(201).json({ ...words.create(term, lookup), unavailable: lookup.unavailable });
+    extras.posFilter = normalizePosFilter(chosen, lookup.partsOfSpeech);
+    res.status(201).json({ ...words.create(term, kindOf(term), lookup, extras), unavailable: lookup.unavailable });
   }));
 
   router.get('/words/:id', (req, res) => res.json(requireWord(req)));
@@ -147,6 +183,16 @@ export function createApiRouter({ words, settings }) {
     const word = requireWord(req);
     const lookup = await lookupWord(word.term, { fresh: true, keys: currentKeys() });
     res.json({ ...words.refresh(word.id, lookup), unavailable: lookup.unavailable });
+  }));
+
+  // Choose which parts of speech a word keeps; the dictionary data is re-applied right away.
+  router.put('/words/:id/parts-of-speech', wrap(async (req, res) => {
+    const word = requireWord(req);
+    const chosen = cleanPartsOfSpeech(req.body?.parts_of_speech) ?? [];
+    const lookup = await lookupWord(word.term, { keys: currentKeys() });
+    if (!lookup.found) throw new HttpError(502, 'Couldn’t get this word from the dictionary right now. Try again later.');
+    const posFilter = normalizePosFilter(chosen, lookup.partsOfSpeech);
+    res.json({ ...words.refresh(word.id, lookup, { posFilter }), unavailable: lookup.unavailable });
   }));
 
   // Reordering is allowed for every definition; dictionary text itself stays read-only.
@@ -198,6 +244,85 @@ export function createApiRouter({ words, settings }) {
     res.json(words.recordReview(word.id, req.body.known));
   });
 
+  // ----- Compare -----
+
+  // A side of a comparison: your saved version if the term is in your library (your own
+  // definitions and order), otherwise the dictionary's. The lookup also supplies MW's
+  // synonym discussion for words saved before discussions were stored.
+  async function profileFor(term) {
+    const existing = words.findByTerm(term);
+    const lookup = await lookupWord(term, { keys: currentKeys() });
+    if (existing) {
+      const w = words.get(existing.id);
+      return {
+        term: w.term, kind: w.kind, inLibrary: true, id: w.id,
+        pronunciation: w.pronunciation, audioUrl: w.audio_url, etymology: w.etymology, firstUse: w.first_use,
+        partsOfSpeech: [...new Set(w.definitions.map((d) => d.part_of_speech).filter(Boolean))],
+        definitions: w.definitions.map(({ part_of_speech, text, examples, source }) => ({ part_of_speech, text, examples, source })),
+        synonyms: uniqueValues(w.synonyms).slice(0, MAX_COMPARE_SYNONYMS),
+        antonyms: uniqueValues(w.antonyms).slice(0, MAX_COMPARE_SYNONYMS),
+        synonymDiscussion: w.syn_discussion ?? lookup.synonymDiscussion,
+        found: true,
+      };
+    }
+    return {
+      term: lookup.term, kind: lookup.kind, inLibrary: false, id: null,
+      pronunciation: lookup.pronunciation, audioUrl: lookup.audioUrl, etymology: lookup.etymology,
+      firstUse: lookup.firstUse, partsOfSpeech: lookup.partsOfSpeech.map((p) => p.pos),
+      definitions: lookup.sources[0].definitions,
+      synonyms: uniqueValues(lookup.synonyms).slice(0, MAX_COMPARE_SYNONYMS),
+      antonyms: uniqueValues(lookup.antonyms).slice(0, MAX_COMPARE_SYNONYMS),
+      synonymDiscussion: lookup.synonymDiscussion, found: lookup.found, suggestions: lookup.suggestions,
+      unavailable: lookup.unavailable, keyProblem: lookup.sources.some((s) => s.status === 'disabled' || s.invalidKey),
+    };
+  }
+
+  // MW's synonym discussion, when one of the two words has a discussion naming both.
+  function sharedDiscussion(a, b) {
+    const names = [a.term.toLowerCase(), b.term.toLowerCase()];
+    return [a.synonymDiscussion, b.synonymDiscussion]
+      .find((d) => d && names.every((n) => d.words.includes(n))) ?? null;
+  }
+
+  async function comparePair(req) {
+    const a = cleanTerm(req.query?.a ?? req.body?.a);
+    const b = cleanTerm(req.query?.b ?? req.body?.b);
+    if (a.toLowerCase() === b.toLowerCase()) throw new HttpError(400, 'Pick two different words to compare');
+    const [left, right] = await Promise.all([profileFor(a), profileFor(b)]);
+    return { left, right, discussion: sharedDiscussion(left, right) };
+  }
+
+  router.get('/compare', wrap(async (req, res) => {
+    const { left, right, discussion } = await comparePair(req);
+    const lower = (list) => new Set(list.map((v) => v.toLowerCase()));
+    const leftSyn = lower(left.synonyms);
+    res.json({
+      left, right, discussion,
+      sharedSynonyms: right.synonyms.filter((v) => leftSyn.has(v.toLowerCase())),
+      relation: {
+        synonyms: leftSyn.has(right.term.toLowerCase()) || lower(right.synonyms).has(left.term.toLowerCase()),
+        antonyms: lower(left.antonyms).has(right.term.toLowerCase()) || lower(right.antonyms).has(left.term.toLowerCase()),
+      },
+      explanation: words.getComparison(left.term, right.term),
+      aiAvailable: Boolean(keyInfo('anthropic').value),
+    });
+  }));
+
+  // Explains the difference with Claude (the user's own Anthropic key). Saved per pair, so
+  // each pair costs at most once unless "again" is requested.
+  router.post('/compare/explain', wrap(async (req, res) => {
+    const { left, right, discussion } = await comparePair(req);
+    const saved = words.getComparison(left.term, right.term);
+    if (saved && req.body?.again !== true) return res.json(saved);
+    const apiKey = keyInfo('anthropic').value;
+    if (!apiKey) throw new HttpError(400, 'Add an Anthropic API key in Settings to get AI explanations.');
+    const discussionText = discussion
+      ? discussion.blocks.map((block) => block.text ?? `Example: ${block.example}`).join('\n')
+      : null;
+    const { text, model } = await explainDifference(apiKey, [left, right], discussionText);
+    res.json(words.saveComparison(left.term, right.term, text, model));
+  }));
+
   router.get('/export', (req, res) => {
     const format = req.query.format === 'csv' ? 'csv' : 'json';
     const all = words.exportAll();
@@ -208,32 +333,32 @@ export function createApiRouter({ words, settings }) {
   });
 
   router.get('/keys', (req, res) => {
-    res.json(Object.fromEntries(Object.keys(MW_KEYS).map((name) => {
+    res.json(Object.fromEntries(Object.keys(API_KEYS).map((name) => {
       const { value, source } = keyInfo(name);
       return [name, { set: Boolean(value), source, hint: value ? `••••${value.slice(-4)}` : null }];
     })));
   });
 
-  // Empty string removes the app's saved key; anything else is checked with MW before saving.
+  // Empty string removes the app's saved key; anything else is checked with its service first.
   router.put('/keys', wrap(async (req, res) => {
-    const updates = Object.entries(req.body ?? {}).filter(([name]) => MW_KEYS[name]);
+    const updates = Object.entries(req.body ?? {}).filter(([name]) => API_KEYS[name]);
     if (!updates.length) throw new HttpError(400, 'Nothing to save');
     for (const [name, raw] of updates) {
       const value = String(raw ?? '').trim();
       if (value.length > MAX_KEY) throw new HttpError(400, 'That key is too long');
       if (!value) continue;
-      const result = await testKey(name, value);
+      const result = await API_KEYS[name].test(value);
       if (!result.ok) {
-        const { label } = MW_KEYS[name];
+        const { label, rejected } = API_KEYS[name];
         throw new HttpError(400, result.invalidKey
-          ? `Merriam-Webster didn’t accept this ${label} key. Check that it’s your Collegiate ${label} key.`
+          ? rejected
           : `Couldn’t check the ${label} key (${result.message}). Try again.`);
       }
     }
     for (const [name, raw] of updates) {
       const value = String(raw ?? '').trim();
-      if (value) settings.merge({ [MW_KEYS[name].setting]: value });
-      else settings.remove(MW_KEYS[name].setting);
+      if (value) settings.merge({ [API_KEYS[name].setting]: value });
+      else settings.remove(API_KEYS[name].setting);
     }
     clearLookupCache();
     res.json({ ok: true });

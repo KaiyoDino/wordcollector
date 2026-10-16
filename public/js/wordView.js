@@ -1,7 +1,8 @@
 // The word detail drawer: one ordered list of definitions (dictionary text read-only),
 // origin, thesaurus, where you found it, tags and notes.
 import { api } from './api.js';
-import { el, icon, debounce, toast } from './dom.js';
+import { el, icon, debounce, toast, playAudio } from './dom.js';
+import { discussion } from './profile.js';
 
 const MW_URL = (t) => `https://www.merriam-webster.com/dictionary/${encodeURIComponent(t)}`;
 const COMMON_POS = ['noun', 'verb', 'adjective', 'adverb', 'pronoun', 'preposition', 'conjunction', 'interjection', 'phrase'];
@@ -35,6 +36,7 @@ function resetFieldState() {
   flushers.clear();
   drafts.clear();
   expanded.clear();
+  posEditor = null;
 }
 
 export async function openWord(id) {
@@ -88,6 +90,7 @@ function render() {
     renderHead(),
     renderSub(),
     renderDefinitions(),
+    renderDiscussion(),
     renderOrigin(),
     renderRelations(),
     renderFoundIn(),
@@ -148,9 +151,6 @@ function renderHead() {
   );
 }
 
-export function playAudio(url) {
-  new Audio(url).play().catch(() => toast('Couldn’t play the pronunciation'));
-}
 
 function renderSub() {
   const found = [...new Set(word.definitions.map((d) => d.part_of_speech).filter(Boolean))];
@@ -320,6 +320,7 @@ function renderDefinitions() {
   return section('Definitions',
     el('a', { class: 'meta', href: MW_URL(word.term), target: '_blank', rel: 'noopener noreferrer' }, 'Merriam-Webster', icon('external')),
     el('div', { class: 'source-block' },
+      renderPosRow(),
       defs.length
         ? [el('p', { class: 'hint' }, 'Drag or use the arrows to reorder. The top definition shows on the card.'),
           el('ol', { class: 'def-list' }, defs.map((d, i) => defRow(d, i, defs.length)))]
@@ -328,7 +329,82 @@ function renderDefinitions() {
   );
 }
 
+// Which parts of speech the dictionary definitions are kept for ("base" as an adjective only).
+let posEditor = null;   // { offered: [{pos, count}], chosen: Set } while choosing
+
+function renderPosRow() {
+  const dictionaryPos = new Set(word.definitions.filter((d) => d.source !== 'user').map((d) => d.part_of_speech).filter(Boolean));
+  if (!word.pos_filter && dictionaryPos.size < 2 && !posEditor) return null;
+
+  if (posEditor) {
+    const save = el('button', {
+      class: 'btn primary small', type: 'button',
+      onclick: async () => {
+        save.disabled = true;
+        save.textContent = 'Saving…';
+        try {
+          const updated = await api.setPartsOfSpeech(word.id, [...posEditor.chosen]);
+          posEditor = null;
+          word = updated;
+          hooks.onChanged?.();
+          render();
+        } catch (err) {
+          toast(err.message);
+          save.disabled = false;
+          save.textContent = 'Save';
+        }
+      },
+    }, 'Save');
+    return el('div', { class: 'pos-choice inline' },
+      el('p', { class: 'hint' }, 'Keep dictionary definitions and synonyms for:'),
+      el('div', { class: 'pos-options' }, posEditor.offered.map(({ pos, count }) => {
+        const box = el('input', { type: 'checkbox', value: pos, checked: posEditor.chosen.has(pos) });
+        box.addEventListener('change', () => {
+          if (box.checked) posEditor.chosen.add(pos);
+          else if (posEditor.chosen.size > 1) posEditor.chosen.delete(pos);
+          else { box.checked = true; toast('Keep at least one part of speech.'); }
+        });
+        return el('label', { class: 'pos-option' }, box, el('span', {}, pos), el('span', { class: 'pos-count' }, `${count}`));
+      })),
+      el('div', { class: 'buttons' },
+        el('button', { class: 'btn ghost small', type: 'button', onclick: () => { posEditor = null; render(); } }, 'Cancel'),
+        save),
+      el('p', { class: 'hint' }, 'Your own definitions are never removed.'));
+  }
+
+  const change = el('button', {
+    class: 'link-button', type: 'button',
+    onclick: async () => {
+      change.textContent = 'Loading…';
+      try {
+        const lookup = await api.lookup(word.term);
+        if ((lookup.partsOfSpeech ?? []).length < 2) {
+          toast('Merriam-Webster lists only one part of speech for this word.');
+          render();
+          return;
+        }
+        posEditor = {
+          offered: lookup.partsOfSpeech,
+          chosen: new Set(word.pos_filter ?? lookup.partsOfSpeech.map((p) => p.pos)),
+        };
+        render();
+      } catch (err) {
+        toast(err.message);
+        render();
+      }
+    },
+  }, 'Change');
+  return el('p', { class: 'pos-summary' },
+    word.pos_filter ? `Saved as ${word.pos_filter.join(' and ')} only · ` : 'Saving all parts of speech · ', change);
+}
+
 // ----- Origin, thesaurus -----
+
+function renderDiscussion() {
+  if (!word.syn_discussion) return null;
+  return section('Synonym discussion', null,
+    el('div', { class: 'source-block' }, discussion(word.syn_discussion, { emphasize: [word.term] })));
+}
 
 function renderOrigin() {
   if (!word.etymology && !word.first_use) return null;
@@ -465,7 +541,11 @@ function renderFoot() {
         toast(err.message);
       }
     },
-  }, icon('trash'), 'Delete word');
+  }, icon('trash'), word.kind === 'phrase' ? 'Delete phrase' : 'Delete word');
 
-  return el('div', { class: 'drawer-foot' }, refresh, remove);
+  const compare = el('button', {
+    class: 'btn ghost', type: 'button', onclick: () => hooks.onCompare?.(word.term),
+  }, icon('compare'), 'Compare with…');
+
+  return el('div', { class: 'drawer-foot' }, refresh, compare, remove);
 }

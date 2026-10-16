@@ -71,6 +71,12 @@ export function parseBackup(data) {
         found_title: str(w.found_title, 300),
         found_author: str(w.found_author, 200),
         found_page: str(w.found_page, 40),
+        // Older backups have no kind; derive it the same way new words get it.
+        kind: w.kind === 'phrase' || w.kind === 'word' ? w.kind : /\s/.test(w.term.trim()) ? 'phrase' : 'word',
+        pos_filter: Array.isArray(w.pos_filter) && w.pos_filter.length
+          ? w.pos_filter.filter((p) => typeof p === 'string').slice(0, 20).map((p) => p.slice(0, 40))
+          : null,
+        syn_discussion: synonymDiscussion(w.syn_discussion),
         review_box: Math.min(Math.max(Number.parseInt(w.review_box, 10) || 0, 0), REVIEW_MAX_BOX),
         review_count: Math.max(Number.parseInt(w.review_count, 10) || 0, 0),
         last_reviewed_at: isoOr(w.last_reviewed_at, null),
@@ -96,5 +102,24 @@ function relations(list) {
   return arr(list)
     .filter((r) => typeof r?.value === 'string' && r.value.trim())
     .slice(0, 500)
-    .map((r) => ({ value: r.value.trim().slice(0, 100), source: str(r.source, 40) || 'import' }));
+    .map((r) => ({
+      value: r.value.trim().slice(0, 100),
+      part_of_speech: optStr(r.part_of_speech, 40),
+      source: str(r.source, 40) || 'import',
+    }));
+}
+
+// Keeps only the expected shape: { title, blocks: [{text} | {example}], words: [] }.
+function synonymDiscussion(d) {
+  if (!d || typeof d !== 'object' || !Array.isArray(d.blocks)) return null;
+  const blocks = d.blocks.slice(0, 50).map((b) => (
+    typeof b?.text === 'string' ? { text: b.text.slice(0, 3000) }
+    : typeof b?.example === 'string' ? { example: b.example.slice(0, 1000) }
+    : null)).filter(Boolean);
+  if (!blocks.length) return null;
+  return {
+    title: str(d.title, 100) || 'synonyms',
+    blocks,
+    words: arr(d.words).filter((x) => typeof x === 'string').slice(0, 30).map((x) => x.slice(0, 100)),
+  };
 }

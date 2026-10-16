@@ -45,6 +45,10 @@ export function debounce(fn, ms) {
   return debounced;
 }
 
+export function playAudio(url) {
+  new Audio(url).play().catch(() => toast('Couldn’t play the pronunciation'));
+}
+
 let toastTimer;
 export function toast(message, { action } = {}) {
   const node = document.getElementById('toast');

@@ -22,10 +22,14 @@ const qs = (params) => new URLSearchParams(params).toString();
 
 export const api = {
   lookup: (term) => request('GET', `/lookup?${qs({ term })}`),
-  listWords: ({ sort, favFirst, q, tag = '' }) =>
-    request('GET', `/words?${qs({ sort, favFirst: favFirst ? '1' : '0', q, tag })}`),
+  listWords: ({ sort, favFirst, q, tag = '', kind = '' }) =>
+    request('GET', `/words?${qs({ sort, favFirst: favFirst ? '1' : '0', q, tag, kind })}`),
   getWord: (id) => request('GET', `/words/${id}`),
-  addWord: (term) => request('POST', '/words', { term }),
+  // details: optional { parts_of_speech, notes, found_title, found_author, found_page, tags }
+  addWord: (term, details = {}) => request('POST', '/words', { term, ...details }),
+  setPartsOfSpeech: (id, partsOfSpeech) => request('PUT', `/words/${id}/parts-of-speech`, { parts_of_speech: partsOfSpeech }),
+  compare: (a, b) => request('GET', `/compare?${qs({ a, b })}`),
+  explainComparison: (a, b, again = false) => request('POST', '/compare/explain', { a, b, again }),
   updateWord: (id, changes) => request('PATCH', `/words/${id}`, changes),
   deleteWord: (id) => request('DELETE', `/words/${id}`),
   refreshWord: (id) => request('POST', `/words/${id}/refresh`),
@@ -34,8 +38,8 @@ export const api = {
   deleteDefinition: (id, defId) => request('DELETE', `/words/${id}/definitions/${defId}`),
   reorderDefinitions: (id, ids) => request('PUT', `/words/${id}/definitions/order`, { ids }),
   listTags: () => request('GET', '/tags'),
-  reviewBatch: ({ tag = '', favorites = false, limit = 20 } = {}) =>
-    request('GET', `/review?${qs({ tag, favorites: favorites ? '1' : '0', limit })}`),
+  reviewBatch: ({ tag = '', favorites = false, kind = '', limit = 20 } = {}) =>
+    request('GET', `/review?${qs({ tag, favorites: favorites ? '1' : '0', kind, limit })}`),
   recordReview: (id, known) => request('POST', `/words/${id}/review`, { known }),
   importBackup: (data) => request('POST', '/import', data),
   exportUrl: (format) => `/api/export?format=${format}`,

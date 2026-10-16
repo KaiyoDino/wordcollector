@@ -10,6 +10,7 @@ export const DEFAULTS = {
   density: 'cards',
   sort: 'date',
   favFirst: false,
+  kind: '',
 };
 
 const ACCENTS = [
@@ -100,8 +101,8 @@ dialog.querySelectorAll('.segmented').forEach((group) => {
 
 fontSize.addEventListener('input', () => setSettings({ fontSize: Number(fontSize.value) }));
 document.getElementById('settings-reset').addEventListener('click', () => {
-  const { sort, favFirst } = current;
-  setSettings({ ...DEFAULTS, sort, favFirst });
+  const { sort, favFirst, kind } = current;
+  setSettings({ ...DEFAULTS, sort, favFirst, kind });
 });
 document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
 

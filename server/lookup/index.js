@@ -1,18 +1,35 @@
 // Queries the dictionary and thesaurus in parallel and merges the results into one profile.
 import { lookupCollegiate, lookupThesaurus } from './merriamWebster.js';
 
+// Unique per (value, part of speech): the same synonym can belong to the noun and the
+// adjective, and must survive if only one of them is saved. Pages showing a lookup
+// de-duplicate by value.
 function mergeRelations(sources, kind, term) {
-  const seen = new Set([term.toLowerCase()]);
+  const self = term.toLowerCase();
+  const seen = new Set();
   const out = [];
   for (const source of sources) {
-    for (const value of source[kind] ?? []) {
-      const key = value.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
+    for (const { value: raw, pos } of source[kind] ?? []) {
+      const value = String(raw).trim();
+      const key = `${value.toLowerCase()}
+${pos ?? ''}`;
+      if (!value || value.toLowerCase() === self || seen.has(key)) continue;
       seen.add(key);
-      out.push({ value: value.trim(), source: source.id });
+      out.push({ value, part_of_speech: pos ?? null, source: source.id });
     }
   }
   return out;
+}
+
+export const kindOf = (term) => (/\s/.test(term.trim()) ? 'phrase' : 'word');
+
+// Distinct parts of speech in dictionary order, with how many definitions each has.
+function partsOfSpeech(definitions) {
+  const counts = new Map();
+  for (const { part_of_speech: pos } of definitions) {
+    if (pos) counts.set(pos, (counts.get(pos) ?? 0) + 1);
+  }
+  return [...counts].map(([pos, count]) => ({ pos, count }));
 }
 
 // Recent results, so saving right after a preview doesn't query every dictionary again.
@@ -49,6 +66,7 @@ async function queryAll(clean, keys) {
 
   return {
     term: clean,
+    kind: kindOf(clean),
     found: mw.status === 'found',
     unavailable: [mw, thesaurus].filter((s) => s.status === 'error' && !s.invalidKey).map((s) => s.name),
     pronunciation: mw.pronunciation,
@@ -56,6 +74,8 @@ async function queryAll(clean, keys) {
     etymology: mw.etymology,
     firstUse: mw.firstUse,
     primaryPos: firstDef?.part_of_speech ?? null,
+    partsOfSpeech: partsOfSpeech(mw.definitions),
+    synonymDiscussion: mw.synonymDiscussion ?? null,
     suggestions: mw.suggestions,
     sources: [mw, thesaurus].map(({ id, name, url, status, message, invalidKey, definitions }) => ({
       id, name, url, status, message, invalidKey: Boolean(invalidKey), definitions: definitions ?? [],

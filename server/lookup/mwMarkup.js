@@ -10,7 +10,8 @@ export function stripMarkup(input) {
     .replace(/^\s*\{bc\}/, '')                 // leading bold colon
     .replace(/\{bc\}/g, ': ')
     .replace(/\{(?:ldquo|rdquo)\}/g, '"')
-    .replace(LINK, '$1')
+    // Link text can carry a homograph number ("{sx|degrading:1|…}" → "degrading").
+    .replace(LINK, (_, word) => word.replace(/:\d+$/, ''))
     .replace(/\{[^}]*\}/g, '')                 // any remaining formatting tags
     .replace(/\s+([,;:.])/g, '$1')
     .replace(/\s+/g, ' ')

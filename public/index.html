@@ -29,7 +29,7 @@
     <div class="toolbar">
       <label class="search">
         <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-        <input id="search" type="search" placeholder="Search words and notes" aria-label="Search words and notes" autocomplete="off">
+        <input id="search" type="search" placeholder="Search your library" aria-label="Search words, phrases and notes" autocomplete="off">
       </label>
       <select id="sort" aria-label="Sort words">
         <option value="date">Newest first</option>
@@ -38,13 +38,24 @@
         <option value="alpha_desc">Z → A</option>
         <option value="pos">Part of speech</option>
       </select>
+      <select id="kind-filter" aria-label="Show words, phrases or both">
+        <option value="">Words &amp; phrases</option>
+        <option value="word">Words</option>
+        <option value="phrase">Phrases</option>
+      </select>
       <select id="tag-filter" aria-label="Filter by tag" hidden>
         <option value="">All tags</option>
       </select>
       <button id="fav-first" class="btn ghost toggle" type="button" aria-pressed="false" title="Show favorites first">
         <svg class="icon" aria-hidden="true"><use href="#i-star"/></svg><span>Favorites first</span>
       </button>
-      <button id="open-review" class="btn ghost" type="button" title="Review with flashcards">
+      <button id="open-lookup" class="btn ghost labeled" type="button" title="Dictionary lookup (D)">
+        <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>Dictionary</span>
+      </button>
+      <button id="open-compare" class="btn ghost labeled" type="button" title="Compare two words (C)">
+        <svg class="icon" aria-hidden="true"><use href="#i-compare"/></svg><span>Compare</span>
+      </button>
+      <button id="open-review" class="btn ghost labeled" type="button" title="Review with flashcards (R)">
         <svg class="icon" aria-hidden="true"><use href="#i-cards"/></svg><span>Review</span>
       </button>
       <button id="open-settings" class="btn ghost icon-only" type="button" title="Settings" aria-label="Settings">
@@ -77,16 +88,39 @@
   <dialog id="add-dialog" class="modal" aria-labelledby="add-title">
     <form id="add-form" method="dialog" class="modal-body">
       <div class="modal-head">
-        <h2 id="add-title">Add a word</h2>
+        <h2 id="add-title">Add to library</h2>
         <button class="btn ghost icon-only" type="button" data-close aria-label="Close">
           <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
         </button>
       </div>
       <div class="add-row">
-        <input id="add-term" name="term" type="text" placeholder="Type a word…" autocomplete="off" spellcheck="false" maxlength="100" required>
+        <input id="add-term" name="term" type="text" placeholder="Type a word or phrase…" autocomplete="off" spellcheck="false" maxlength="100" required>
         <button id="add-lookup" class="btn" type="submit" value="lookup">Look up</button>
       </div>
       <div id="add-preview" class="preview" aria-live="polite"></div>
+      <fieldset id="add-pos" class="pos-choice" hidden>
+        <legend>Parts of speech to save</legend>
+        <div class="pos-options" id="add-pos-options"></div>
+      </fieldset>
+      <details id="add-extras" class="add-extras">
+        <summary>Notes, source &amp; tags</summary>
+        <div class="extras-body">
+          <label class="found-field"><span>Notes</span>
+            <textarea id="add-notes" class="field" rows="3" maxlength="5000" placeholder="How you’d use it, what it reminds you of…"></textarea>
+          </label>
+          <div class="found-grid">
+            <label class="found-field found_title"><span>Title</span>
+              <input id="add-found-title" class="field" type="text" maxlength="300" placeholder="Book, article, show…"></label>
+            <label class="found-field"><span>Author</span>
+              <input id="add-found-author" class="field" type="text" maxlength="200" placeholder="Author"></label>
+            <label class="found-field"><span>Page</span>
+              <input id="add-found-page" class="field" type="text" maxlength="40" placeholder="p."></label>
+          </div>
+          <label class="found-field"><span>Tags (comma-separated)</span>
+            <input id="add-tags" class="field" type="text" maxlength="400" list="add-tag-options" placeholder="e.g. GRE, from books"></label>
+          <datalist id="add-tag-options"></datalist>
+        </div>
+      </details>
       <div class="modal-foot">
         <button class="btn ghost" type="button" data-close>Cancel</button>
         <button id="add-save" class="btn primary" type="button" disabled>Add to library</button>
@@ -154,6 +188,14 @@
             <button class="btn ghost small" type="button" data-key-remove="thesaurus" hidden>Remove</button>
           </span>
         </label>
+        <label class="key-field">
+          <span>Anthropic API key <em class="key-optional">optional, for AI explanations in Compare</em> <em class="key-status" data-key-status="anthropic"></em></span>
+          <span class="key-row">
+            <input class="field" type="password" data-key="anthropic" autocomplete="off" spellcheck="false" maxlength="200" placeholder="sk-ant-…">
+            <button class="btn ghost small" type="button" data-key-remove="anthropic" hidden>Remove</button>
+          </span>
+          <span class="hint">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>. Each new explanation costs about 1–2 cents, billed to that key; saved explanations are free to reopen.</span>
+        </label>
         <div class="button-row">
           <button class="btn" id="keys-save" type="button">Save keys</button>
           <span id="keys-message" class="key-message" role="status"></span>
@@ -196,6 +238,41 @@
     <div id="review-body" class="review-body"></div>
   </div>
 
+  <!-- Dictionary lookup -->
+  <div id="lookup" class="review overlay" role="dialog" aria-modal="true" aria-labelledby="lookup-title" hidden>
+    <div class="review-top">
+      <h2 id="lookup-title">Dictionary</h2>
+      <form id="lookup-form" class="overlay-search" role="search">
+        <input id="lookup-term" class="field" type="search" placeholder="Look up a word or phrase…" autocomplete="off" spellcheck="false" maxlength="100" aria-label="Word or phrase to look up">
+        <button class="btn primary" type="submit">Look up</button>
+      </form>
+      <button class="btn ghost icon-only" type="button" data-overlay-close aria-label="Close dictionary">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="lookup-body" class="overlay-body"></div>
+  </div>
+
+  <!-- Compare -->
+  <div id="compare" class="review overlay" role="dialog" aria-modal="true" aria-labelledby="compare-title" hidden>
+    <div class="review-top">
+      <h2 id="compare-title">Compare</h2>
+      <form id="compare-form" class="overlay-search compare-inputs">
+        <input id="compare-a" class="field" type="text" list="compare-options" placeholder="First word" autocomplete="off" spellcheck="false" maxlength="100" aria-label="First word or phrase">
+        <button id="compare-swap" class="btn ghost icon-only" type="button" title="Swap" aria-label="Swap the two words">
+          <svg class="icon" aria-hidden="true"><use href="#i-compare"/></svg>
+        </button>
+        <input id="compare-b" class="field" type="text" list="compare-options" placeholder="Second word" autocomplete="off" spellcheck="false" maxlength="100" aria-label="Second word or phrase">
+        <button class="btn primary" type="submit">Compare</button>
+        <datalist id="compare-options"></datalist>
+      </form>
+      <button class="btn ghost icon-only" type="button" data-overlay-close aria-label="Close compare">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="compare-body" class="overlay-body"></div>
+  </div>
+
   <div id="toast" class="toast" role="status" hidden></div>
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -215,6 +292,9 @@
       <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 4h12a2 2 0 0 1 2 2v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 8h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-compare" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h13M17 12l4 4-4 4M21 16H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
     </defs>
   </svg>
 

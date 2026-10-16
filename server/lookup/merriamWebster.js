@@ -16,11 +16,16 @@ const crossRefTargets = (entry) =>
 
 // Keep entries for this exact word. An exact entry that is only a cross-reference
 // ("ran" -> "past tense of run") also pulls in the target's entries that list the term
-// as an inflection. With no exact entry, fall back to entries listing it as a stem.
-function relevantEntries(entries, term) {
+// as an inflection. With no exact entry, fall back to entries listing it as a stem,
+// except for thesaurus phrases: "break the ice" is a stem of "break", whose synonyms
+// (shatter, fracture…) say nothing about the phrase.
+function relevantEntries(entries, term, ref) {
   const t = term.toLowerCase();
   const exact = entries.filter((e) => headword(e) === t);
-  if (!exact.length) return entries.filter((e) => hasStem(e, t));
+  if (!exact.length) {
+    if (ref === 'thesaurus' && /\s/.test(t)) return [];
+    return entries.filter((e) => hasStem(e, t));
+  }
   const targets = new Set(exact.flatMap(crossRefTargets));
   const referenced = entries.filter((e) => targets.has(headword(e)) && hasStem(e, t));
   return [...exact, ...referenced];
@@ -49,7 +54,7 @@ async function query(ref, term, key) {
   if (body.length === 0 || typeof body[0] === 'string') {
     return { entries: [], suggestions: body.filter((s) => typeof s === 'string').slice(0, 8) };
   }
-  return { entries: relevantEntries(body, term), suggestions: [] };
+  return { entries: relevantEntries(body, term, ref), suggestions: [] };
 }
 
 function pronunciationOf(entry) {
@@ -59,7 +64,9 @@ function pronunciationOf(entry) {
 
 const firstAudio = (entry) => entry?.hwi?.prs?.find((p) => p.sound?.audio)?.sound.audio;
 
-const MAX_DEFINITIONS = 20;
+// Lookups return up to this many; saving keeps fewer (see MAX_SAVED_DEFINITIONS in words.js)
+// after any part-of-speech choice, so choosing "adjective" can't lose senses past the cap.
+const MAX_DEFINITIONS = 60;
 const MAX_EXAMPLES = 3;
 
 // Walks a sense sequence (def[].sseq) and yields each sense object, including
@@ -153,6 +160,7 @@ export async function lookupCollegiate(term, key) {
       : null;
     const withDate = entries.find((e) => e.date);
     source.firstUse = withDate ? stripMarkup(withDate.date) || null : null;
+    source.synonymDiscussion = synonymDiscussionOf(entries);
     return { ...source, status: source.definitions.length ? 'found' : 'not_found' };
   } catch (err) {
     return { ...source, status: 'error', message: describeError(err), invalidKey: Boolean(err.invalidKey) };
@@ -171,15 +179,42 @@ export async function lookupThesaurus(term, key) {
   try {
     const { entries } = await query('thesaurus', term, key);
     if (!entries.length) return { ...source, status: 'not_found' };
+    // Keep each entry's part of speech, so a word saved as only some parts of speech
+    // keeps only the matching synonyms.
     for (const entry of entries) {
-      source.synonyms.push(...(entry.meta?.syns ?? []).flat());
-      source.antonyms.push(...(entry.meta?.ants ?? []).flat());
+      const pos = entry.fl ?? null;
+      source.synonyms.push(...(entry.meta?.syns ?? []).flat().map((value) => ({ value, pos })));
+      source.antonyms.push(...(entry.meta?.ants ?? []).flat().map((value) => ({ value, pos })));
     }
     const found = source.synonyms.length || source.antonyms.length;
     return { ...source, status: found ? 'found' : 'not_found' };
   } catch (err) {
     return { ...source, status: 'error', message: describeError(err), invalidKey: Boolean(err.invalidKey) };
   }
+}
+
+// MW's synonym discussion ("transient, transitory, ephemeral … mean lasting only a short
+// time. transient applies to …"): kept in order as text and example blocks, plus the words
+// it compares (marked {sc}…{/sc} in the source) so the page can highlight them.
+function synonymDiscussionOf(entries) {
+  const syns = entries.find((e) => e.syns?.length)?.syns?.[0];
+  if (!syns?.pt?.length) return null;
+  const words = new Set();
+  const blocks = [];
+  for (const [type, value] of syns.pt) {
+    if (type === 'text') {
+      for (const m of String(value).matchAll(/\{sc\}(.*?)\{\/sc\}/g)) words.add(m[1].toLowerCase());
+      const text = stripMarkup(value);
+      if (text) blocks.push({ text });
+    } else if (type === 'vis') {
+      for (const v of value) {
+        const example = stripMarkup(v.t);
+        if (example) blocks.push({ example });
+      }
+    }
+  }
+  if (!blocks.length) return null;
+  return { title: stripMarkup(syns.pl) || 'synonyms', blocks, words: [...words] };
 }
 
 // Checks a key against its reference ('collegiate' or 'thesaurus').

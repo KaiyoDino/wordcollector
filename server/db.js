@@ -78,6 +78,24 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_word_tags_tag ON word_tags(tag_id);
   `,
+  // 2: phrases, chosen parts of speech, MW synonym discussions, saved AI comparisons.
+  `
+  ALTER TABLE words ADD COLUMN kind TEXT NOT NULL DEFAULT 'word';
+  UPDATE words SET kind = 'phrase' WHERE instr(trim(term), ' ') > 0;
+  ALTER TABLE words ADD COLUMN pos_filter TEXT;
+  ALTER TABLE words ADD COLUMN syn_discussion TEXT;
+  ALTER TABLE relations ADD COLUMN part_of_speech TEXT;
+
+  CREATE TABLE comparisons (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    term_a      TEXT NOT NULL,
+    term_b      TEXT NOT NULL,
+    explanation TEXT NOT NULL,
+    model       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    UNIQUE (term_a, term_b)
+  );
+  `,
 ];
 
 function migrate(db) {

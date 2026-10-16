@@ -1,12 +1,13 @@
-// Merriam-Webster API key controls in the Settings dialog. Keys are checked and stored by
-// the server; the browser only ever sees whether a key is set and its last 4 characters.
+// API key controls in the Settings dialog (Merriam-Webster, and optionally Anthropic). Keys
+// are checked and stored by the server; the browser only ever sees whether a key is set and
+// its last 4 characters.
 import { api } from './api.js';
 
 const dialog = document.getElementById('settings-dialog');
 const section = document.getElementById('keys-section');
 const saveButton = document.getElementById('keys-save');
 const message = document.getElementById('keys-message');
-const NAMES = ['collegiate', 'thesaurus'];
+const NAMES = ['collegiate', 'thesaurus', 'anthropic'];
 
 const input = (name) => section.querySelector(`[data-key="${name}"]`);
 
@@ -58,11 +59,12 @@ for (const name of NAMES) {
   });
 }
 
-// Opens Settings scrolled to the key fields (used when a lookup has no working key).
-export function openKeySettings() {
+// Opens Settings scrolled to a key field (used when a lookup or explanation needs a key).
+export function openKeySettings(name = 'collegiate') {
   if (!dialog.open) dialog.showModal();
-  section.scrollIntoView({ block: 'start' });
-  input('collegiate').focus();
+  const field = input(NAMES.includes(name) ? name : 'collegiate');
+  field.closest('.key-field').scrollIntoView({ block: 'center' });
+  field.focus();
 }
 
 dialog.addEventListener('close', () => {

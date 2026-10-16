@@ -199,7 +199,8 @@ textarea.field { resize: vertical; min-height: 4.5rem; line-height: 1.5; }
 .chips-label:first-child { margin-top: 0; }
 
 .notes-status { font-size: 0.75rem; color: var(--text-faint); font-family: var(--font-ui); }
-.drawer-foot { display: flex; gap: 0.5rem; justify-content: space-between; margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.drawer-foot { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.drawer-foot .danger { margin-left: auto; }
 
 /* Modals */
 .modal {
@@ -431,3 +432,100 @@ body.no-scroll { overflow: hidden; }
   font-family: var(--font-ui); font-size: 0.875rem;
 }
 .app-updates .button-row { align-items: center; justify-content: space-between; }
+
+/* ----- 1.1: Dictionary, Compare, parts of speech, add-dialog extras ----- */
+
+.link-button {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--accent-strong); font: inherit; font-family: var(--font-ui); font-size: 0.85em; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Overlays share the Review screen's frame */
+.overlay .review-top { flex-wrap: wrap; }
+.overlay-search { display: flex; gap: 0.5rem; flex: 1; min-width: min(100%, 18rem); max-width: 44rem; }
+.overlay-search .field { flex: 1; min-width: 0; font-size: 1.05rem; }
+.overlay-body { flex: 1; overflow-y: auto; padding: 1.5rem clamp(1rem, 4vw, 2.5rem) 4rem; }
+.overlay-content { max-width: 46rem; margin: 0 auto; display: grid; gap: 1.25rem; }
+.overlay-content.wide { max-width: 72rem; }
+.overlay-empty { max-width: 40rem; margin: 3rem auto; text-align: center; color: var(--text-muted); }
+.overlay-empty .chips { justify-content: center; }
+
+/* Profile (Dictionary + Compare columns) */
+.profile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.4rem; display: grid; gap: 1.1rem; }
+.profile-head .profile-term, h3.profile-term { font-size: 2rem; margin: 0 0 0.3rem; overflow-wrap: anywhere; }
+.profile-head .word-sub { margin: 0; }
+.profile-section h4 {
+  margin: 0 0 0.45rem; font-family: var(--font-ui); font-size: 0.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;
+}
+.profile-section .defs li { margin: 0.35rem 0; }
+.profile-section .link-button { margin: 0.2rem 0 0 1.3rem; }
+.profile-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.source-tag.inline { margin-left: 0.4rem; }
+.chip.shared { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); font-weight: 600; }
+
+/* MW synonym discussion */
+.discussion p { margin: 0 0 0.6rem; }
+.discussion .example { display: block; margin: -0.2rem 0 0.7rem 1rem; }
+.syn-word { font-style: normal; font-weight: 600; }
+.syn-word.strong { color: var(--accent-strong); }
+.attribution { margin: 0.4rem 0 0; }
+
+/* Compare */
+.compare-inputs { max-width: 52rem; align-items: center; }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.compare-col { display: grid; gap: 0.75rem; min-width: 0; }
+.difference {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1.25rem 1.4rem; display: grid; gap: 0.9rem;
+}
+.difference > h3 { font-size: 1.3rem; }
+.relation-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ai-explanation { border-top: 1px dashed var(--border); padding-top: 0.9rem; }
+.ai-explanation h4 {
+  margin: 0 0 0.5rem; font-family: var(--font-ui); font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--accent-strong); display: flex; align-items: center; gap: 0.35rem;
+}
+.ai-explanation p { margin: 0 0 0.55rem; }
+.ai-explanation .example { display: block; margin-left: 1rem; }
+
+/* Parts-of-speech choice (add dialog + word panel) */
+.pos-choice { display: grid; gap: 0.45rem; }
+.pos-choice.inline { padding: 0.75rem; margin-bottom: 0.75rem; background: var(--surface-2); border-radius: var(--radius-sm); }
+.pos-choice.inline .hint { margin: 0; }
+.pos-choice .buttons { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.pos-options { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pos-option {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  padding: 0.3rem 0.7rem 0.3rem 0.5rem; border: 1px solid var(--border-strong); border-radius: 999px;
+  background: var(--surface); font-family: var(--font-ui); font-size: 0.85rem;
+}
+.pos-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pos-option input { accent-color: var(--accent); margin: 0; }
+.pos-count { color: var(--text-faint); font-size: 0.75rem; }
+.pos-summary { font-family: var(--font-ui); font-size: 0.8rem; color: var(--text-muted); margin: 0 0 0.6rem; }
+
+/* Add dialog: notes, source & tags */
+.add-extras { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.add-extras summary { cursor: pointer; padding: 0.6rem 0.8rem; font-family: var(--font-ui); font-size: 0.85rem; font-weight: 500; color: var(--text-muted); }
+.add-extras[open] summary { border-bottom: 1px solid var(--border); }
+.extras-body { display: grid; gap: 0.6rem; padding: 0.8rem; }
+.extras-body textarea.field { min-height: 3.5rem; }
+
+.key-optional { font-style: normal; color: var(--text-faint); }
+.key-field > .hint { margin: 0.15rem 0 0; }
+
+/* Toolbar: the labeled buttons go icon-only before the bar gets crowded */
+@media (max-width: 1180px) {
+  .toolbar .labeled span { display: none; }
+  .toolbar .labeled { width: 2.4rem; padding: 0; }
+}
+
+@media (max-width: 760px) {
+  .compare-grid { grid-template-columns: 1fr; }
+  .compare-inputs { flex-wrap: wrap; }
+  .compare-inputs .field { flex: 1 1 40%; }
+  .profile-head .profile-term, h3.profile-term { font-size: 1.6rem; }
+  .profile, .difference { padding: 1rem; }
+}

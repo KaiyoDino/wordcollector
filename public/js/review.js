@@ -1,7 +1,6 @@
 // Flashcard review: see the word, recall the meaning, reveal, then mark whether you knew it.
 import { api } from './api.js';
-import { el, icon, toast } from './dom.js';
-import { playAudio } from './wordView.js';
+import { el, icon, toast, playAudio } from './dom.js';
 
 const overlay = document.getElementById('review');
 const body = document.getElementById('review-body');
@@ -52,7 +51,9 @@ async function renderStart() {
   progress.textContent = '';
   const tags = await api.listTags().catch(() => []);
   const scope = el('select', { class: 'field', 'aria-label': 'Words to review' },
-    el('option', { value: 'all' }, 'All words'),
+    el('option', { value: 'all' }, 'Everything'),
+    el('option', { value: 'word' }, 'Words only'),
+    el('option', { value: 'phrase' }, 'Phrases only'),
     el('option', { value: 'fav' }, 'Favorites'),
     tags.map((t) => el('option', { value: `tag:${t.name}` }, `Tag: ${t.name} (${t.count})`)));
   if (lastOptions) scope.value = lastOptions.value;
@@ -64,6 +65,7 @@ async function renderStart() {
       lastOptions = {
         value,
         favorites: value === 'fav',
+        kind: value === 'word' || value === 'phrase' ? value : '',
         tag: value.startsWith('tag:') ? value.slice(4) : '',
       };
       begin();
@@ -73,7 +75,7 @@ async function renderStart() {
   body.replaceChildren(el('div', { class: 'review-card start' },
     el('h3', {}, 'Flashcards'),
     el('p', { class: 'hint' },
-      'You’ll see a word. Think of what it means, then reveal the definition and mark whether you knew it. ',
+      'You’ll see a word or phrase. Think of what it means, then reveal the definition and mark whether you knew it. ',
       'Words you miss come back sooner.'),
     el('label', { class: 'found-field' }, el('span', {}, 'Review'), scope),
     el('p', { class: 'hint keys' }, 'Keys: Space reveals · ← didn’t know · → knew it · Esc exits'),
@@ -83,7 +85,7 @@ async function renderStart() {
 
 async function begin() {
   try {
-    queue = await api.reviewBatch({ tag: lastOptions.tag, favorites: lastOptions.favorites, limit: 20 });
+    queue = await api.reviewBatch({ tag: lastOptions.tag, favorites: lastOptions.favorites, kind: lastOptions.kind, limit: 20 });
   } catch (err) {
     toast(err.message);
     return;
