@@ -15,6 +15,11 @@ const PREFERRED_PORT = 47615;
 // Installed app: data in the user's app-data folder. `npm run desktop` while developing:
 // the project's data/ folder, the same library as `npm start`. WORDCOLLECTOR_DATA_DIR
 // overrides both (handy for testing with a throwaway library).
+// With the override, Electron's own files (window state, browser storage, caches) go there
+// too, so a test run never touches the real app-data folder or the library in it.
+if (process.env.WORDCOLLECTOR_DATA_DIR) {
+  app.setPath('userData', path.join(process.env.WORDCOLLECTOR_DATA_DIR, 'electron'));
+}
 const dataDir = process.env.WORDCOLLECTOR_DATA_DIR
   || (app.isPackaged ? app.getPath('userData') : path.join(ROOT, 'data'));
 const windowStateFile = path.join(app.getPath('userData'), 'window-state.json');
