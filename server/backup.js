@@ -2,11 +2,12 @@
 import { MAX_TAGS_PER_WORD, MAX_TAG_LENGTH, REVIEW_MAX_BOX } from './words.js';
 
 export const BACKUP_FORMAT = 'wordcollector-backup';
-export const BACKUP_VERSION = 1;
+// Version 2 added comparisons; version-1 files still import.
+export const BACKUP_VERSION = 2;
 const MAX_WORDS = 50000;
 
-export function toBackup(words) {
-  return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exported_at: new Date().toISOString(), words };
+export function toBackup(words, comparisons = []) {
+  return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exported_at: new Date().toISOString(), words, comparisons };
 }
 
 const CSV_COLUMNS = [
@@ -122,4 +123,34 @@ function synonymDiscussion(d) {
     blocks,
     words: arr(d.words).filter((x) => typeof x === 'string').slice(0, 30).map((x) => x.slice(0, 100)),
   };
+}
+
+const MAX_COMPARISONS = 20000;
+const PROVIDERS = new Set(['groq', 'anthropic']);
+
+// Saved comparisons and AI explanations from a version-2 backup (empty for version 1).
+export function parseComparisons(data) {
+  return arr(data?.comparisons)
+    .filter((c) => typeof c?.term_a === 'string' && c.term_a.trim() && typeof c?.term_b === 'string' && c.term_b.trim())
+    .slice(0, MAX_COMPARISONS)
+    .map((c) => {
+      const e = c.explanation;
+      const explanation = e && typeof e.text === 'string' && e.text.trim()
+        ? {
+          text: e.text.trim().slice(0, 5000),
+          model: str(e.model, 100) || 'unknown',
+          provider: PROVIDERS.has(e.provider) ? e.provider : null,
+          created_at: isoOr(e.created_at, null),
+        }
+        : null;
+      return {
+        term_a: c.term_a.trim().replace(/\s+/g, ' ').slice(0, 100),
+        term_b: c.term_b.trim().replace(/\s+/g, ' ').slice(0, 100),
+        saved: Boolean(c.saved),
+        note: str(c.note, 2000),
+        saved_at: isoOr(c.saved_at, null),
+        explanation,
+      };
+    })
+    .filter((c) => c.term_a.toLowerCase() !== c.term_b.toLowerCase() && (c.saved || c.explanation));
 }

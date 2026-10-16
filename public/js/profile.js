@@ -1,6 +1,6 @@
 // Read-only word profile, shared by the Dictionary view and Compare. Works with a lookup
 // result (normalized by fromLookup) or a compare side from the server (same shape).
-import { el, icon, playAudio } from './dom.js';
+import { el, fill, icon, playAudio } from './dom.js';
 
 const DEFS_PER_POS = 6;
 const CHIP_LIMIT = 20;
@@ -58,7 +58,8 @@ function definitionGroups(definitions) {
 // Chips for synonyms/antonyms. highlight: lowercase values to emphasize (e.g. shared synonyms).
 export function chips(values, { onPick, highlight = new Set(), library = new Map() } = {}) {
   const box = el('div', { class: 'chips' });
-  const render = (all) => box.replaceChildren(
+  // fill(), not replaceChildren(): the "Show all" button is `false` for short lists.
+  const render = (all) => fill(box,
     ...(all ? values : values.slice(0, CHIP_LIMIT)).map((value) => el('button', {
       class: `chip${highlight.has(value.toLowerCase()) ? ' shared' : ''}${library.has(value.toLowerCase()) ? ' in-library' : ''}`,
       type: 'button',

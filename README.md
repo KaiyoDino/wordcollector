@@ -8,7 +8,7 @@ The point of this program is to be able to launch a program that can store words
 - **Choose parts of speech**: for words like "base" (noun, verb and adjective), tick only the ones you want to keep. You can change the choice later from the word's panel; your own definitions are never removed.
 - **Phrases** ("break the ice", "piece of cake") live in the same library, with a Words / Phrases filter and their own review option.
 - **Dictionary** (`d`): look up any word or phrase without saving it, then add it, open it if it's already saved, or compare it.
-- **Compare** (`c`): two words or phrases side by side, with shared synonyms highlighted and Merriam-Webster's synonym discussion when it covers the pair. With an Anthropic API key (optional, see below), **Explain the difference with AI** writes a short explanation with Claude; each one is saved so it's only paid for once.
+- **Compare** (`c`): two words or phrases side by side, with shared synonyms highlighted and Merriam-Webster's synonym discussion when it covers the pair. With a free Groq key or an Anthropic key (optional, see below), **Explain the difference with AI** writes a short explanation; each one is kept so it's only written once. **Save comparison** keeps a pair, with your own note, in the **Saved** tab.
 - **Thesaurus**: synonyms and antonyms from the Merriam-Webster Collegiate Thesaurus. Long lists are collapsed behind "Show all". Click one to open it, or to add it if it isn't in your library yet.
 - **Words not in any dictionary** can still be saved. Merriam-Webster's "Did you mean…?" suggestions are shown when it has them.
 - **One ordered list of definitions**: Merriam-Webster text is read-only, and your own definitions can be added, edited and deleted. Reorder them by dragging, with the arrow buttons, or with **Set as main**. The top definition is the one shown on the card. **Refresh definitions** keeps your order.
@@ -16,7 +16,7 @@ The point of this program is to be able to launch a program that can store words
 - **Tags**: add tags to words and filter the library by tag.
 - **Notes** (they save automatically) and **favorites**.
 - **Flashcard review**: see a word, recall its meaning, reveal the definition and mark whether you knew it. Words you miss come back sooner. You can review everything, words or phrases only, favorites, or one tag.
-- **Backup**: export the whole library as JSON (which can be imported again) or as a CSV spreadsheet, from Settings.
+- **Backup**: export the whole library as JSON (which can be imported again, including saved comparisons and AI explanations) or as a CSV spreadsheet, from Settings.
 - **Sorting**: newest/oldest, A→Z/Z→A, or grouped by part of speech, with an optional "Favorites first" toggle. Search covers words, notes, titles and authors.
 - **Appearance**: light, dark or system theme; accent color; serif, sans or mono font; text size; card or compact layout.
 
@@ -48,9 +48,14 @@ npm run desktop    # the desktop app, in its own window
 
 Alternatively, copy `.env.example` to `.env` and put the keys there. A key saved in the app takes priority over `.env`. Keys are never sent to the browser or included in exports, and `.env` is git-ignored.
 
-### Anthropic API key (optional)
+### AI explanations (optional)
 
-Only needed for **Explain the difference with AI** in Compare. Create a key at [console.anthropic.com](https://console.anthropic.com/settings/keys) and paste it into **Settings → Anthropic API key** (or set `ANTHROPIC_API_KEY` in `.env`). Each new explanation uses Claude Opus 5.5 and costs roughly 1–2 cents, billed to that key; saved explanations reopen for free. Without a key, everything else in Compare still works.
+**Explain the difference with AI** in Compare can use either of two providers. Choose one in **Settings → AI explanations**. If the chosen one has no key, the other is used.
+
+- **Groq (free)**: create a key at [console.groq.com/keys](https://console.groq.com/keys). No card is needed, and the free plan allows roughly 1,000 explanations a day. It runs the open model `openai/gpt-oss-120b`. Groq retires models from time to time; if explanations start failing with a "no longer offers this model" message, update the app, or set `GROQ_MODEL` in `.env` to a current model from [console.groq.com/docs/models](https://console.groq.com/docs/models).
+- **Claude (paid)**: create a key at [console.anthropic.com](https://console.anthropic.com/settings/keys). Each new explanation uses Claude Opus 5.5 and costs roughly 1–2 cents, billed to that key.
+
+Keys can also go in `.env` as `GROQ_API_KEY` / `ANTHROPIC_API_KEY`. Explanations are kept per pair, so reopening one never calls the AI again.
 
 Without Merriam-Webster keys the app still runs, but no definitions or synonyms are filled in. You can still save words and add your own definitions. If a lookup fails (for example, while you're offline), open the word later and use **Refresh definitions**.
 

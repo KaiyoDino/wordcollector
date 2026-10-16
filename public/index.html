@@ -188,14 +188,30 @@
             <button class="btn ghost small" type="button" data-key-remove="thesaurus" hidden>Remove</button>
           </span>
         </label>
-        <label class="key-field">
-          <span>Anthropic API key <em class="key-optional">optional, for AI explanations in Compare</em> <em class="key-status" data-key-status="anthropic"></em></span>
-          <span class="key-row">
-            <input class="field" type="password" data-key="anthropic" autocomplete="off" spellcheck="false" maxlength="200" placeholder="sk-ant-…">
-            <button class="btn ghost small" type="button" data-key-remove="anthropic" hidden>Remove</button>
-          </span>
-          <span class="hint">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>. Each new explanation costs about 1–2 cents, billed to that key; saved explanations are free to reopen.</span>
-        </label>
+        <div class="ai-settings">
+          <p class="key-subhead">AI explanations in Compare <em class="key-optional">optional</em></p>
+          <div class="segmented" data-setting="aiProvider" aria-label="AI provider">
+            <button type="button" value="groq">Groq · free</button>
+            <button type="button" value="anthropic">Claude · paid</button>
+          </div>
+          <label class="key-field">
+            <span>Groq API key <em class="key-status" data-key-status="groq"></em></span>
+            <span class="key-row">
+              <input class="field" type="password" data-key="groq" autocomplete="off" spellcheck="false" maxlength="200" placeholder="gsk_…">
+              <button class="btn ghost small" type="button" data-key-remove="groq" hidden>Remove</button>
+            </span>
+            <span class="hint">Free, no card needed: get one at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">console.groq.com/keys</a>. Allows roughly 1,000 explanations a day.</span>
+          </label>
+          <label class="key-field">
+            <span>Anthropic API key <em class="key-status" data-key-status="anthropic"></em></span>
+            <span class="key-row">
+              <input class="field" type="password" data-key="anthropic" autocomplete="off" spellcheck="false" maxlength="200" placeholder="sk-ant-…">
+              <button class="btn ghost small" type="button" data-key-remove="anthropic" hidden>Remove</button>
+            </span>
+            <span class="hint">Uses Claude, usually the stronger writer. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>; each new explanation costs about 1–2 cents. Saved explanations reopen for free.</span>
+          </label>
+          <p class="hint">If the chosen provider has no key, the other one is used.</p>
+        </div>
         <div class="button-row">
           <button class="btn" id="keys-save" type="button">Save keys</button>
           <span id="keys-message" class="key-message" role="status"></span>
@@ -257,6 +273,10 @@
   <div id="compare" class="review overlay" role="dialog" aria-modal="true" aria-labelledby="compare-title" hidden>
     <div class="review-top">
       <h2 id="compare-title">Compare</h2>
+      <div class="segmented compare-tabs" role="tablist" aria-label="Compare or saved comparisons">
+        <button type="button" role="tab" data-tab="compare" aria-selected="true">Compare</button>
+        <button type="button" role="tab" data-tab="saved" aria-selected="false">Saved <span id="saved-count" class="tab-count"></span></button>
+      </div>
       <form id="compare-form" class="overlay-search compare-inputs">
         <input id="compare-a" class="field" type="text" list="compare-options" placeholder="First word" autocomplete="off" spellcheck="false" maxlength="100" aria-label="First word or phrase">
         <button id="compare-swap" class="btn ghost icon-only" type="button" title="Swap" aria-label="Swap the two words">
@@ -295,6 +315,7 @@
       <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 8h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-compare" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h13M17 12l4 4-4 4M21 16H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z" fill="var(--bookmark-fill, none)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     </defs>
   </svg>
 

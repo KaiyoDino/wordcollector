@@ -517,7 +517,7 @@ body.no-scroll { overflow: hidden; }
 .key-field > .hint { margin: 0.15rem 0 0; }
 
 /* Toolbar: the labeled buttons go icon-only before the bar gets crowded */
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   .toolbar .labeled span { display: none; }
   .toolbar .labeled { width: 2.4rem; padding: 0; }
 }
@@ -528,4 +528,44 @@ body.no-scroll { overflow: hidden; }
   .compare-inputs .field { flex: 1 1 40%; }
   .profile-head .profile-term, h3.profile-term { font-size: 1.6rem; }
   .profile, .difference { padding: 1rem; }
+}
+
+/* Compare: tabs and saved comparisons */
+.compare-tabs { flex: none; }
+.compare-tabs button { padding: 0 0.8rem; white-space: nowrap; }
+.tab-count { color: var(--text-faint); font-size: 0.8em; }
+.difference-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.difference-head h3 { font-size: 1.3rem; flex: 1 1 18rem; }
+.save-block { display: grid; gap: 0.4rem; flex: 0 1 22rem; }
+.save-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.saved-flag { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--font-ui); font-size: 0.85rem; font-weight: 600; color: var(--accent-strong); }
+.save-note textarea { min-height: 3rem; font-size: 0.92rem; }
+.saved-heading { font-size: 1.05rem; margin: 0.5rem 0 0; }
+.saved-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.saved-item {
+  display: flex; align-items: center; gap: 0.25rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.saved-item:hover { border-color: var(--border-strong); }
+.saved-open {
+  flex: 1; min-width: 0; display: grid; gap: 0.2rem; text-align: left; cursor: pointer;
+  padding: 0.7rem 0.9rem; border: 0; background: none; color: inherit; font: inherit;
+}
+.saved-pair { font-size: 1.1rem; overflow-wrap: anywhere; }
+.saved-pair .vs { color: var(--text-faint); font-style: italic; font-size: 0.85em; }
+.saved-note { color: var(--text-muted); font-size: 0.9rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.saved-meta { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-ui); font-size: 0.75rem; color: var(--text-faint); }
+.saved-meta .badge { display: inline-flex; align-items: center; gap: 0.2rem; }
+.saved-meta .badge .icon { width: 0.8rem; height: 0.8rem; }
+.saved-item > .btn { margin-right: 0.4rem; }
+.ai-provider { margin-left: 0.6rem; }
+
+/* Settings: AI explanations */
+.ai-settings { display: grid; gap: 0.6rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.key-subhead { margin: 0; font-family: var(--font-ui); font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.ai-settings > .hint { margin: 0; }
+
+@media (max-width: 760px) {
+  .compare-tabs { order: 3; width: 100%; }
+  .save-block { flex-basis: 100%; }
 }

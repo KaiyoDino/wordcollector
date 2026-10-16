@@ -411,29 +411,128 @@ export function createWordStore(db) {
     });
   }
 
-  // Saved AI explanations, keyed by the pair in alphabetical order so A-vs-B and B-vs-A match.
+  // Comparisons are keyed by the pair in alphabetical order, so A-vs-B and B-vs-A match.
   const pairKey = (a, b) => [a.trim().toLowerCase(), b.trim().toLowerCase()].sort();
 
-  function getComparison(a, b) {
+  // ----- AI explanations (one per pair; each was paid for or rate-limited, so they're kept) -----
+
+  function getExplanation(a, b) {
     const [x, y] = pairKey(a, b);
-    return db.get('SELECT explanation, model, created_at FROM comparisons WHERE term_a = $a AND term_b = $b', { $a: x, $b: y }) ?? null;
+    return db.get(
+      'SELECT explanation, model, provider, created_at FROM comparisons WHERE term_a = $a AND term_b = $b',
+      { $a: x, $b: y },
+    ) ?? null;
   }
 
-  function saveComparison(a, b, explanation, model) {
+  function writeExplanation(a, b, { explanation, model, provider, created_at = now() }) {
     const [x, y] = pairKey(a, b);
-    db.transaction(() => db.run(
-      `INSERT INTO comparisons (term_a, term_b, explanation, model, created_at) VALUES ($a, $b, $e, $m, $ts)
+    db.run(
+      `INSERT INTO comparisons (term_a, term_b, explanation, model, provider, created_at) VALUES ($a, $b, $e, $m, $p, $ts)
        ON CONFLICT(term_a, term_b) DO UPDATE SET explanation = excluded.explanation, model = excluded.model,
-                                                 created_at = excluded.created_at`,
-      { $a: x, $b: y, $e: explanation, $m: model, $ts: now() },
+                                                 provider = excluded.provider, created_at = excluded.created_at`,
+      { $a: x, $b: y, $e: explanation, $m: model, $p: provider ?? null, $ts: created_at },
+    );
+  }
+
+  function saveExplanation(a, b, explanation, model, provider) {
+    db.transaction(() => writeExplanation(a, b, { explanation, model, provider }));
+    return getExplanation(a, b);
+  }
+
+  // ----- Saved comparisons (a pair you chose to keep, with an optional note) -----
+
+  const SAVED_COLUMNS = `s.id, s.term_a, s.term_b, s.note, s.created_at, s.updated_at,
+    EXISTS (SELECT 1 FROM comparisons c WHERE c.term_a = s.key_a AND c.term_b = s.key_b) AS has_explanation`;
+  const toSaved = (row) => row && { ...row, has_explanation: Boolean(row.has_explanation) };
+
+  function listSavedComparisons() {
+    return db.all(`SELECT ${SAVED_COLUMNS} FROM saved_comparisons s ORDER BY s.created_at DESC, s.id DESC`).map(toSaved);
+  }
+
+  function getSavedComparison(id) {
+    return toSaved(db.get(`SELECT ${SAVED_COLUMNS} FROM saved_comparisons s WHERE s.id = $id`, { $id: id }));
+  }
+
+  function findSavedComparison(a, b) {
+    const [x, y] = pairKey(a, b);
+    return toSaved(db.get(`SELECT ${SAVED_COLUMNS} FROM saved_comparisons s WHERE s.key_a = $a AND s.key_b = $b`, { $a: x, $b: y }));
+  }
+
+  function writeSavedComparison(a, b, { note, created_at = now() }) {
+    const [x, y] = pairKey(a, b);
+    db.run(
+      `INSERT INTO saved_comparisons (term_a, term_b, key_a, key_b, note, created_at, updated_at)
+       VALUES ($ta, $tb, $a, $b, $note, $ts, $ts)
+       ON CONFLICT(key_a, key_b) DO UPDATE SET note = COALESCE($noteOrNull, note), updated_at = $now`,
+      { $ta: a, $tb: b, $a: x, $b: y, $note: note ?? '', $noteOrNull: note ?? null, $ts: created_at, $now: now() },
+    );
+  }
+
+  // Saving a pair that's already saved keeps it (and only changes the note if one is given).
+  function saveComparison(a, b, note) {
+    db.transaction(() => writeSavedComparison(a, b, { note }));
+    return findSavedComparison(a, b);
+  }
+
+  function updateSavedComparisonNote(id, note) {
+    db.transaction(() => db.run(
+      'UPDATE saved_comparisons SET note = $note, updated_at = $ts WHERE id = $id',
+      { $id: id, $note: note, $ts: now() },
     ));
-    return getComparison(a, b);
+    return getSavedComparison(id);
+  }
+
+  function removeSavedComparison(id) {
+    return db.transaction(() => db.run('DELETE FROM saved_comparisons WHERE id = $id', { $id: id }).changes > 0);
+  }
+
+  // ----- Backups: saved pairs and every AI explanation -----
+
+  function exportComparisons() {
+    const byKey = new Map();
+    for (const s of db.all('SELECT term_a, term_b, key_a, key_b, note, created_at FROM saved_comparisons ORDER BY id')) {
+      byKey.set(`${s.key_a}\n${s.key_b}`, {
+        term_a: s.term_a, term_b: s.term_b, saved: true, note: s.note, saved_at: s.created_at, explanation: null,
+      });
+    }
+    for (const c of db.all('SELECT term_a, term_b, explanation, model, provider, created_at FROM comparisons ORDER BY id')) {
+      const key = `${c.term_a}\n${c.term_b}`;
+      const entry = byKey.get(key) ?? { term_a: c.term_a, term_b: c.term_b, saved: false, note: '', saved_at: null };
+      entry.explanation = { text: c.explanation, model: c.model, provider: c.provider, created_at: c.created_at };
+      byKey.set(key, entry);
+    }
+    return [...byKey.values()];
+  }
+
+  // comparisons: validated entries (see backup.js). Pairs already present are left alone.
+  function importComparisons(comparisons) {
+    return db.transaction(() => {
+      let added = 0;
+      for (const c of comparisons) {
+        let changed = false;
+        if (c.saved && !findSavedComparison(c.term_a, c.term_b)) {
+          writeSavedComparison(c.term_a, c.term_b, { note: c.note, created_at: c.saved_at ?? now() });
+          changed = true;
+        }
+        if (c.explanation && !getExplanation(c.term_a, c.term_b)) {
+          writeExplanation(c.term_a, c.term_b, {
+            explanation: c.explanation.text, model: c.explanation.model, provider: c.explanation.provider,
+            created_at: c.explanation.created_at ?? now(),
+          });
+          changed = true;
+        }
+        if (changed) added++;
+      }
+      return added;
+    });
   }
 
   return {
     list, get, findByTerm, create, refresh, update, remove,
     definitionIds, reorder, getDefinition, addUserDefinition, updateUserDefinition, removeDefinition,
-    listTags, reviewBatch, recordReview, exportAll, importAll, getComparison, saveComparison,
+    listTags, reviewBatch, recordReview, exportAll, importAll,
+    getExplanation, saveExplanation, listSavedComparisons, getSavedComparison, findSavedComparison,
+    saveComparison, updateSavedComparisonNote, removeSavedComparison, exportComparisons, importComparisons,
   };
 }
 

@@ -96,6 +96,22 @@ const MIGRATIONS = [
     UNIQUE (term_a, term_b)
   );
   `,
+  // 3: saved comparisons (with your note), and which AI provider wrote each explanation.
+  `
+  CREATE TABLE saved_comparisons (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    term_a     TEXT NOT NULL,
+    term_b     TEXT NOT NULL,
+    key_a      TEXT NOT NULL,
+    key_b      TEXT NOT NULL,
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (key_a, key_b)
+  );
+  ALTER TABLE comparisons ADD COLUMN provider TEXT;
+  UPDATE comparisons SET provider = 'anthropic' WHERE model LIKE 'claude%';
+  `,
 ];
 
 function migrate(db) {

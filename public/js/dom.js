@@ -14,6 +14,14 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
+// Replaces a node's children. Like el(), it flattens lists and skips false/null/undefined,
+// which replaceChildren() would otherwise write out as the text "false" or "null".
+export function fill(node, ...children) {
+  node.replaceChildren();
+  append(node, children);
+  return node;
+}
+
 function append(node, children) {
   for (const child of children.flat(Infinity)) {
     if (child == null || child === false) continue;

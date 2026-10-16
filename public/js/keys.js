@@ -7,7 +7,7 @@ const dialog = document.getElementById('settings-dialog');
 const section = document.getElementById('keys-section');
 const saveButton = document.getElementById('keys-save');
 const message = document.getElementById('keys-message');
-const NAMES = ['collegiate', 'thesaurus', 'anthropic'];
+const NAMES = ['collegiate', 'thesaurus', 'groq', 'anthropic'];
 
 const input = (name) => section.querySelector(`[data-key="${name}"]`);
 

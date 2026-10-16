@@ -20,11 +20,12 @@ export function initBackup({ onImported }) {
       return;
     }
     try {
-      const { added, skipped } = await api.importBackup(data);
+      const { added, skipped, comparisons = 0 } = await api.importBackup(data);
       const plural = (n) => `${n} word${n === 1 ? '' : 's'}`;
-      toast(skipped
+      const extra = comparisons ? ` Restored ${comparisons} comparison${comparisons === 1 ? '' : 's'}.` : '';
+      toast((skipped
         ? `Imported ${plural(added)}. Skipped ${plural(skipped)} already in your library.`
-        : `Imported ${plural(added)}.`);
+        : `Imported ${plural(added)}.`) + extra);
       onImported?.();
     } catch (err) {
       toast(err.message);

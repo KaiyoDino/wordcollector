@@ -11,6 +11,7 @@ export const DEFAULTS = {
   sort: 'date',
   favFirst: false,
   kind: '',
+  aiProvider: 'groq',
 };
 
 const ACCENTS = [
@@ -101,8 +102,9 @@ dialog.querySelectorAll('.segmented').forEach((group) => {
 
 fontSize.addEventListener('input', () => setSettings({ fontSize: Number(fontSize.value) }));
 document.getElementById('settings-reset').addEventListener('click', () => {
-  const { sort, favFirst, kind } = current;
-  setSettings({ ...DEFAULTS, sort, favFirst, kind });
+  // Reset covers appearance only; list choices and the AI provider stay.
+  const { sort, favFirst, kind, aiProvider } = current;
+  setSettings({ ...DEFAULTS, sort, favFirst, kind, aiProvider });
 });
 document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
 

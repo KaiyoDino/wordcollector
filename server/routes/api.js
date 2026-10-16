@@ -2,12 +2,13 @@ import express from 'express';
 import { lookupWord, clearLookupCache, kindOf } from '../lookup/index.js';
 import { testKey } from '../lookup/merriamWebster.js';
 import { USER_SOURCE, MAX_TAGS_PER_WORD, MAX_TAG_LENGTH, normalizePosFilter } from '../words.js';
-import { toBackup, toCsv, parseBackup, BackupError } from '../backup.js';
-import { explainDifference, testAnthropicKey } from '../ai.js';
+import { toBackup, toCsv, parseBackup, parseComparisons, BackupError } from '../backup.js';
+import { explainDifference, AI_PROVIDERS } from '../ai.js';
 
 const MAX_TERM = 100;
 const MAX_TEXT = 5000;
-const SETTINGS_KEYS = new Set(['theme', 'accent', 'font', 'fontSize', 'density', 'sort', 'favFirst', 'kind']);
+const SETTINGS_KEYS = new Set(['theme', 'accent', 'font', 'fontSize', 'density', 'sort', 'favFirst', 'kind', 'aiProvider']);
+const MAX_NOTE = 2000;
 const KINDS = new Set(['word', 'phrase']);
 
 // API keys: saved in the app's settings table (never sent to the browser), else .env.
@@ -23,9 +24,14 @@ const API_KEYS = {
     test: (key) => testKey('thesaurus', key),
     rejected: 'Merriam-Webster didn’t accept this Thesaurus key. Check that it’s your Collegiate Thesaurus key.',
   },
+  groq: {
+    setting: 'groq_key', env: 'GROQ_API_KEY', label: 'Groq',
+    test: (key) => AI_PROVIDERS.groq.testKey(key),
+    rejected: 'Groq didn’t accept this API key. Copy it again from console.groq.com/keys.',
+  },
   anthropic: {
     setting: 'anthropic_key', env: 'ANTHROPIC_API_KEY', label: 'Anthropic',
-    test: testAnthropicKey,
+    test: (key) => AI_PROVIDERS.anthropic.testKey(key),
     rejected: 'Anthropic didn’t accept this API key. Copy it again from console.anthropic.com.',
   },
 };
@@ -97,10 +103,23 @@ export function createApiRouter({ words, settings }) {
   }
   const currentKeys = () => ({ collegiate: keyInfo('collegiate').value, thesaurus: keyInfo('thesaurus').value });
 
+  // The AI provider for explanations: the one chosen in Settings, or the other one if only it
+  // has a key. Null when neither has a key.
+  function currentAi() {
+    const chosen = settings.get('aiProvider') === 'anthropic' ? 'anthropic' : 'groq';
+    const other = chosen === 'groq' ? 'anthropic' : 'groq';
+    const id = keyInfo(chosen).value ? chosen : keyInfo(other).value ? other : null;
+    if (!id) return { available: false, provider: null, label: null, chosen };
+    const provider = AI_PROVIDERS[id];
+    return { available: true, provider: id, label: provider.label, model: provider.model(), chosen, apiKey: keyInfo(id).value };
+  }
+  const publicAi = ({ apiKey, ...info }) => info;
+
   // Registered before the default parser so backups can be larger than 100kb.
   router.post('/import', express.json({ limit: '10mb' }), (req, res) => {
     try {
-      res.json(words.importAll(parseBackup(req.body)));
+      const result = words.importAll(parseBackup(req.body));
+      res.json({ ...result, comparisons: words.importComparisons(parseComparisons(req.body)) });
     } catch (err) {
       if (err instanceof BackupError) throw new HttpError(400, err.message);
       throw err;
@@ -303,8 +322,9 @@ export function createApiRouter({ words, settings }) {
         synonyms: leftSyn.has(right.term.toLowerCase()) || lower(right.synonyms).has(left.term.toLowerCase()),
         antonyms: lower(left.antonyms).has(right.term.toLowerCase()) || lower(right.antonyms).has(left.term.toLowerCase()),
       },
-      explanation: words.getComparison(left.term, right.term),
-      aiAvailable: Boolean(keyInfo('anthropic').value),
+      explanation: words.getExplanation(left.term, right.term),
+      saved: words.findSavedComparison(left.term, right.term),
+      ai: publicAi(currentAi()),
     });
   }));
 
@@ -312,16 +332,44 @@ export function createApiRouter({ words, settings }) {
   // each pair costs at most once unless "again" is requested.
   router.post('/compare/explain', wrap(async (req, res) => {
     const { left, right, discussion } = await comparePair(req);
-    const saved = words.getComparison(left.term, right.term);
-    if (saved && req.body?.again !== true) return res.json(saved);
-    const apiKey = keyInfo('anthropic').value;
-    if (!apiKey) throw new HttpError(400, 'Add an Anthropic API key in Settings to get AI explanations.');
+    const existing = words.getExplanation(left.term, right.term);
+    if (existing && req.body?.again !== true) return res.json(existing);
+    const ai = currentAi();
+    if (!ai.available) throw new HttpError(400, 'Add a free Groq API key in Settings to get AI explanations.');
     const discussionText = discussion
       ? discussion.blocks.map((block) => block.text ?? `Example: ${block.example}`).join('\n')
       : null;
-    const { text, model } = await explainDifference(apiKey, [left, right], discussionText);
-    res.json(words.saveComparison(left.term, right.term, text, model));
+    const { text, model } = await explainDifference(ai.provider, ai.apiKey, [left, right], discussionText);
+    res.json(words.saveExplanation(left.term, right.term, text, model, ai.provider));
   }));
+
+  // ----- Saved comparisons -----
+
+  const requireSaved = (req) => {
+    const id = Number(req.params.id);
+    const saved = Number.isInteger(id) ? words.getSavedComparison(id) : null;
+    if (!saved) throw new HttpError(404, 'Saved comparison not found');
+    return saved;
+  };
+
+  router.get('/saved-comparisons', (req, res) => res.json(words.listSavedComparisons()));
+
+  router.post('/saved-comparisons', (req, res) => {
+    const a = cleanTerm(req.body?.a);
+    const b = cleanTerm(req.body?.b);
+    if (a.toLowerCase() === b.toLowerCase()) throw new HttpError(400, 'Pick two different words to compare');
+    res.status(201).json(words.saveComparison(a, b, cleanText(req.body?.note, 'Note', { max: MAX_NOTE })));
+  });
+
+  router.patch('/saved-comparisons/:id', (req, res) => {
+    const saved = requireSaved(req);
+    res.json(words.updateSavedComparisonNote(saved.id, cleanText(req.body?.note, 'Note', { max: MAX_NOTE }) ?? saved.note));
+  });
+
+  router.delete('/saved-comparisons/:id', (req, res) => {
+    words.removeSavedComparison(requireSaved(req).id);
+    res.status(204).end();
+  });
 
   router.get('/export', (req, res) => {
     const format = req.query.format === 'csv' ? 'csv' : 'json';
@@ -329,7 +377,7 @@ export function createApiRouter({ words, settings }) {
     const date = new Date().toISOString().slice(0, 10);
     res.attachment(`wordcollector-${date}.${format}`);
     if (format === 'csv') res.type('text/csv; charset=utf-8').send(toCsv(all));
-    else res.type('application/json').send(JSON.stringify(toBackup(all), null, 2));
+    else res.type('application/json').send(JSON.stringify(toBackup(all, words.exportComparisons()), null, 2));
   });
 
   router.get('/keys', (req, res) => {

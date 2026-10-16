@@ -16,6 +16,9 @@ export function closeOverlay(node) {
   const i = stack.findIndex((entry) => entry.node === node);
   if (i === -1) return;
   const [{ returnFocus }] = stack.splice(i, 1);
+  // Release focus from the hidden overlay; otherwise keys like D or C would be "typed" into
+  // its search field instead of working as shortcuts.
+  if (node.contains(document.activeElement)) document.activeElement.blur();
   node.classList.remove('open');
   node.hidden = true;
   if (!stack.length && document.getElementById('review').hidden) document.body.classList.remove('no-scroll');
