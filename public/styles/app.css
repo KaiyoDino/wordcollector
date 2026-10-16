@@ -460,6 +460,8 @@ body.no-scroll { overflow: hidden; }
   text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;
 }
 .profile-section .defs li { margin: 0.35rem 0; }
+/* Antonyms follow the synonym chips in the same section; give the heading room. */
+.profile-section .chips + h4 { margin-top: 1.25rem; }
 .profile-section .link-button { margin: 0.2rem 0 0 1.3rem; }
 .profile-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .source-tag.inline { margin-left: 0.4rem; }

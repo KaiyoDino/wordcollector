@@ -1,7 +1,7 @@
 // Compare two words or phrases side by side (press C), with Merriam-Webster's synonym
 // discussion when it covers the pair, an optional AI explanation, and saved comparisons.
 import { api } from './api.js';
-import { el, icon, toast, debounce } from './dom.js';
+import { el, fill, icon, toast, debounce } from './dom.js';
 import { openOverlay } from './overlay.js';
 import { renderProfile, discussion } from './profile.js';
 
@@ -213,9 +213,11 @@ async function run() {
   }
 }
 
-// Plain-text explanation: one paragraph per line, "Example:" lines styled.
+// Plain-text explanation: one paragraph per line, "Example:" lines styled. Some models put
+// everything on one line, so sentences starting "Use …" or "Example:" also begin a new line.
 function explanationText(text) {
-  return text.split(/\n+/).map((line) => line.trim()).filter(Boolean).map((line) => {
+  const lines = text.replace(/([.!?])\s+(?=Use\s|Example:)/g, '$1\n').split(/\n+/);
+  return lines.map((line) => line.trim()).filter(Boolean).map((line) => {
     const example = line.match(/^Example:\s*(.*)$/i);
     return example ? el('p', { class: 'example' }, example[1]) : el('p', {}, line);
   });
@@ -243,7 +245,8 @@ function aiBlock() {
   };
 
   if (explanation) {
-    box.append(
+    // fill(), not append(): explanationText() returns a list of paragraphs.
+    fill(box,
       el('h4', {}, icon('sparkle'), 'AI explanation'),
       explanationText(explanation.explanation),
       el('p', { class: 'hint attribution' },

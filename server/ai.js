@@ -11,7 +11,7 @@ const TIMEOUT_MS = 60_000;
 const SYSTEM_PROMPT = `You are a lexicographer helping a reader who keeps a personal vocabulary notebook.
 Given dictionary profiles of two words or phrases, explain how they differ in meaning, connotation, register, and typical usage.
 
-Write plain text with no markdown, headings, bullet characters, or bold. Keep it under 150 words, in this shape:
+Write plain text with no markdown, headings, bullet characters, or bold. Keep it under 150 words. Put each of these parts on its own line, separated by line breaks:
 - One sentence stating the core difference.
 - A line starting "Use <first term> when" and a line starting "Use <second term> when".
 - One natural example sentence for each term, each on its own line, starting "Example:".
