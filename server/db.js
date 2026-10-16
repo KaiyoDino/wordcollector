@@ -114,8 +114,12 @@ const MIGRATIONS = [
   `,
 ];
 
+export const LATEST_VERSION = MIGRATIONS.length;
+
+const versionOf = (db) => db.exec('PRAGMA user_version')[0].values[0][0];
+
 function migrate(db) {
-  const version = db.exec('PRAGMA user_version')[0].values[0][0];
+  const version = versionOf(db);
   for (let i = version; i < MIGRATIONS.length; i++) {
     db.run('BEGIN');
     try {
@@ -129,11 +133,25 @@ function migrate(db) {
   }
 }
 
-export async function openDatabase(dataDir) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  const file = path.join(dataDir, 'wordcollector.sqlite');
-  const SQL = await initSqlJs();
-  const db = fs.existsSync(file) ? new SQL.Database(fs.readFileSync(file)) : new SQL.Database();
+export class LibraryFileError extends Error {}
+
+// Opens library bytes (or a new library) and brings it to the current version.
+// beforeUpgrade(bytes, fromVersion) runs first when an existing library needs upgrading,
+// so a copy can be kept in case an upgrade goes wrong.
+function prepare(SQL, bytes, { beforeUpgrade } = {}) {
+  let db;
+  try {
+    db = bytes ? new SQL.Database(bytes) : new SQL.Database();
+    if (bytes) db.exec('SELECT 1 FROM sqlite_master LIMIT 1'); // throws if it isn't SQLite
+  } catch {
+    throw new LibraryFileError('This file isn’t a Word Collector library.');
+  }
+  const version = versionOf(db);
+  if (version > LATEST_VERSION) {
+    db.close();
+    throw new LibraryFileError('This library was saved by a newer version of Word Collector. Update the app first.');
+  }
+  if (bytes && version < LATEST_VERSION) beforeUpgrade?.(bytes, version);
   db.run('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
@@ -144,6 +162,34 @@ export async function openDatabase(dataDir) {
     DELETE FROM word_tags WHERE word_id NOT IN (SELECT id FROM words);
     DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM word_tags);
   `);
+  return db;
+}
+
+let sqlModule;
+const loadSql = async () => (sqlModule ??= await initSqlJs());
+
+// Reads a library file without changing it: { version, words } or throws LibraryFileError.
+export async function inspectLibrary(bytes) {
+  const SQL = await loadSql();
+  let db;
+  try {
+    db = new SQL.Database(bytes);
+    const version = versionOf(db);
+    const words = db.exec('SELECT COUNT(*) FROM words')[0].values[0][0];
+    return { version, words };
+  } catch {
+    throw new LibraryFileError('This file isn’t a Word Collector library.');
+  } finally {
+    db?.close();
+  }
+}
+
+// options.beforeUpgrade: see prepare().
+export async function openDatabase(dataDir, options = {}) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const file = path.join(dataDir, 'wordcollector.sqlite');
+  const SQL = await loadSql();
+  let db = prepare(SQL, fs.existsSync(file) ? fs.readFileSync(file) : null, options);
 
   function save() {
     const tmp = `${file}.tmp`;
@@ -189,6 +235,23 @@ export async function openDatabase(dataDir) {
     }
   }
 
+  // The whole library as bytes (what a backup stores).
+  function snapshot() {
+    const bytes = Buffer.from(db.export());
+    db.run('PRAGMA foreign_keys = ON;');
+    return bytes;
+  }
+
+  // Swaps in another library (a restored backup). It's checked and upgraded first; if
+  // that fails, the current library stays as it was.
+  function replace(bytes) {
+    const next = prepare(SQL, bytes);
+    const previous = db;
+    db = next;
+    save();
+    previous.close();
+  }
+
   save();
-  return { all, get, run, transaction, file };
+  return { all, get, run, transaction, snapshot, replace, file };
 }

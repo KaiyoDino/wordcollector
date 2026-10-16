@@ -571,3 +571,22 @@ body.no-scroll { overflow: hidden; }
   .compare-tabs { order: 3; width: 100%; }
   .save-block { flex-basis: 100%; }
 }
+
+/* Settings: automatic backups */
+.backup-location { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: baseline; font-family: var(--font-ui); font-size: 0.82rem; color: var(--text-muted); }
+.backup-location code { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text); overflow-wrap: anywhere; }
+.backup-last { color: var(--text-faint); }
+.backup-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.backup-list:empty { display: none; }
+.backup-item {
+  display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.6rem; align-items: center;
+  padding: 0.35rem 0.4rem 0.35rem 0.75rem; border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui); font-size: 0.82rem;
+}
+.backup-item:last-child { border-bottom: 0; }
+.backup-kind, .backup-words { color: var(--text-muted); }
+.backup-list > li:not(.backup-item) { padding: 0.4rem 0.75rem; }
+@media (max-width: 520px) {
+  .backup-item { grid-template-columns: 1fr auto; }
+  .backup-kind { grid-column: 1; }
+}

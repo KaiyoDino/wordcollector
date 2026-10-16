@@ -16,7 +16,7 @@ The point of this program is to be able to launch a program that can store words
 - **Tags**: add tags to words and filter the library by tag.
 - **Notes** (they save automatically) and **favorites**.
 - **Flashcard review**: see a word, recall its meaning, reveal the definition and mark whether you knew it. Words you miss come back sooner. You can review everything, words or phrases only, favorites, or one tag.
-- **Backup**: export the whole library as JSON (which can be imported again, including saved comparisons and AI explanations) or as a CSV spreadsheet, from Settings.
+- **Automatic backups**: a full copy of the library is saved once a day and before every app upgrade, and any of them can be restored from **Settings → Backups** (the current library is backed up first, so a restore can be undone). You can also export the library as JSON (which can be imported again, including saved comparisons and AI explanations) or as a CSV spreadsheet.
 - **Sorting**: newest/oldest, A→Z/Z→A, or grouped by part of speech, with an optional "Favorites first" toggle. Search covers words, notes, titles and authors.
 - **Appearance**: light, dark or system theme; accent color; serif, sans or mono font; text size; card or compact layout.
 
@@ -26,7 +26,7 @@ Download **Word-Collector-Setup-x.y.z.exe** from the [latest release](https://gi
 
 - Windows may say "Windows protected your PC", because the installer isn't code-signed. Click **More info → Run anyway**.
 - The app updates itself. When a new version has downloaded, a bar at the top says it's ready; click **Restart to update**, or it installs the next time you quit.
-- Your library is kept in `%APPDATA%\Word Collector` and survives updates and uninstalling.
+- Your library is kept in `%APPDATA%\Word Collector` and survives updates and uninstalling. Automatic backups go to `Documents\Word Collector Backups`; choose another folder (for example one synced by OneDrive) in **Settings → Backups → Change folder…**.
 
 ## Run from source
 
@@ -38,7 +38,7 @@ npm start          # web version in your browser
 npm run desktop    # the desktop app, in its own window
 ```
 
-`npm start` opens the app at http://localhost:5173. Both commands use the library in `data/wordcollector.sqlite`, which is never committed.
+`npm start` opens the app at http://localhost:5173. Both commands use the library in `data/wordcollector.sqlite` (backups in `data/backups`), which is never committed. They never touch the installed app: `npm run desktop` keeps its window and browser data in `%APPDATA%\Word Collector (dev)`, so it can run alongside the installed app. Setting `WORDCOLLECTOR_DATA_DIR` puts everything in one throwaway folder, which is how the tests run.
 
 ### Merriam-Webster API keys (free)
 

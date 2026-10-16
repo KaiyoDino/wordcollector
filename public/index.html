@@ -225,9 +225,21 @@
           <button class="btn small" id="update-check" type="button">Check for updates</button>
         </div>
       </fieldset>
-      <fieldset class="library">
-        <legend>Library backup</legend>
-        <p class="hint">Your words are stored only on this computer. Export a backup now and then.</p>
+      <fieldset class="library" id="backups-section">
+        <legend>Backups</legend>
+        <p class="hint">A copy of your whole library (words, notes, comparisons, settings and keys) is saved automatically once a day and before every app upgrade.</p>
+        <div class="backup-location">
+          <span class="backup-where">Saved to <code id="backup-dir"></code></span>
+          <span id="backup-last" class="backup-last"></span>
+        </div>
+        <div class="button-row">
+          <button class="btn" id="backup-now" type="button">Back up now</button>
+          <button class="btn ghost" id="backup-open" type="button" hidden>Open folder</button>
+          <button class="btn ghost" id="backup-change" type="button" hidden>Change folder…</button>
+          <button class="btn ghost" id="backup-default" type="button" hidden>Use default folder</button>
+        </div>
+        <ul id="backup-list" class="backup-list"></ul>
+        <p class="hint">Export a file to keep or share elsewhere, or import one:</p>
         <div class="button-row">
           <a class="btn" id="export-json" download>Export backup (JSON)</a>
           <a class="btn" id="export-csv" download>Export spreadsheet (CSV)</a>

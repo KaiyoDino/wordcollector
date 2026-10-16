@@ -3,17 +3,65 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import fs from 'node:fs';
 import { openDatabase } from './db.js';
 import { createWordStore, createSettingsStore } from './words.js';
 import { createApiRouter } from './routes/api.js';
+import { createBackups } from './backups.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DAILY_CHECK_MS = 6 * 60 * 60 * 1000;
+
+// A custom backup folder chosen in Settings. It lives in a small file next to the library
+// (not inside it) so it's known before the library is opened and upgraded.
+function backupLocation(dataDir, defaultDir) {
+  const file = path.join(dataDir, 'backup-location.json');
+  return {
+    get: () => {
+      try {
+        const { dir } = JSON.parse(fs.readFileSync(file, 'utf8'));
+        return typeof dir === 'string' && path.isAbsolute(dir) ? dir : defaultDir;
+      } catch {
+        return defaultDir;
+      }
+    },
+    set: (dir) => {
+      if (!dir || path.resolve(dir) === path.resolve(defaultDir)) fs.rmSync(file, { force: true });
+      else fs.writeFileSync(file, JSON.stringify({ dir }));
+    },
+    defaultDir,
+  };
+}
 
 // Starts the app and resolves to its URL. The desktop app (electron/main.js) calls this
-// with its own dataDir, then loads the URL in a window.
-export async function startServer({ port = 5173, dataDir = path.join(ROOT, 'data') } = {}) {
-  const db = await openDatabase(dataDir);
+// with its own dataDir and backup folder, then loads the URL in a window.
+// backupDir defaults to a "backups" folder next to the library.
+export async function startServer({ port = 5173, dataDir = path.join(ROOT, 'data'), backupDir } = {}) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const location = backupLocation(dataDir, backupDir ?? path.join(dataDir, 'backups'));
+  const backups = createBackups({ dir: location.get });
+  // Keep a copy of the library before a new version upgrades it.
+  // If the backup folder can't be written (e.g. it was removed), keep it next to the library.
+  const db = await openDatabase(dataDir, {
+    beforeUpgrade: (bytes, fromVersion) => {
+      const kind = `before-upgrade-v${fromVersion}`;
+      try {
+        backups.write(bytes, kind);
+      } catch {
+        backups.write(bytes, kind, path.join(dataDir, 'backups'));
+      }
+    },
+  });
   const settings = createSettingsStore(db);
+  const daily = () => {
+    try {
+      backups.dailyIfDue(db.snapshot);
+    } catch (err) {
+      console.error(`Daily backup failed: ${err.message}`);
+    }
+  };
+  daily();
+  setInterval(daily, DAILY_CHECK_MS).unref();
   const app = express();
   app.disable('x-powered-by');
 
@@ -25,7 +73,7 @@ export async function startServer({ port = 5173, dataDir = path.join(ROOT, 'data
     res.status(403).type('text/plain').send('Forbidden');
   });
 
-  app.use('/api', createApiRouter({ words: createWordStore(db), settings }));
+  app.use('/api', createApiRouter({ words: createWordStore(db), settings, db, backups, location }));
   app.use(express.static(path.join(ROOT, 'public')));
 
   const server = await listen(app, port);

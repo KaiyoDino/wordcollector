@@ -1,9 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import { lookupWord, clearLookupCache, kindOf } from '../lookup/index.js';
 import { testKey } from '../lookup/merriamWebster.js';
 import { USER_SOURCE, MAX_TAGS_PER_WORD, MAX_TAG_LENGTH, normalizePosFilter } from '../words.js';
 import { toBackup, toCsv, parseBackup, parseComparisons, BackupError } from '../backup.js';
 import { explainDifference, AI_PROVIDERS } from '../ai.js';
+import { BackupError as RestoreError } from '../backups.js';
+import { LibraryFileError } from '../db.js';
 
 const MAX_TERM = 100;
 const MAX_TEXT = 5000;
@@ -92,7 +96,7 @@ function cleanPartsOfSpeech(raw) {
 
 const uniqueValues = (items) => [...new Map(items.map((r) => [r.value.toLowerCase(), r.value])).values()];
 
-export function createApiRouter({ words, settings }) {
+export function createApiRouter({ words, settings, db, backups, location }) {
   const router = express.Router();
 
   function keyInfo(name) {
@@ -369,6 +373,51 @@ export function createApiRouter({ words, settings }) {
   router.delete('/saved-comparisons/:id', (req, res) => {
     words.removeSavedComparison(requireSaved(req).id);
     res.status(204).end();
+  });
+
+  // ----- Automatic backups -----
+
+  router.get('/backups', wrap(async (req, res) => {
+    res.json({
+      location: location.get(),
+      defaultLocation: location.defaultDir,
+      isDefault: path.resolve(location.get()) === path.resolve(location.defaultDir),
+      items: await backups.list(),
+    });
+  }));
+
+  router.post('/backups', (req, res) => {
+    res.status(201).json({ name: backups.write(db.snapshot(), 'manual') });
+  });
+
+  // Replaces the whole library (words, comparisons, settings, keys) with a backup.
+  // The current library is backed up first, so a restore can itself be undone.
+  router.post('/backups/restore', wrap(async (req, res) => {
+    try {
+      await backups.restore(req.body?.name, db);
+    } catch (err) {
+      if (err instanceof RestoreError || err instanceof LibraryFileError) throw new HttpError(400, err.message);
+      throw err;
+    }
+    clearLookupCache();
+    res.json({ ok: true });
+  }));
+
+  // Moves future backups to another folder ("" goes back to the default).
+  router.put('/backups/location', (req, res) => {
+    const raw = String(req.body?.dir ?? '').trim();
+    if (raw && (!path.isAbsolute(raw) || raw.length > 500)) throw new HttpError(400, 'Choose a full folder path.');
+    const dir = raw || location.defaultDir;
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const probe = path.join(dir, `.wordcollector-write-test-${process.pid}`);
+      fs.writeFileSync(probe, '');
+      fs.rmSync(probe);
+    } catch {
+      throw new HttpError(400, 'Word Collector can’t save files in that folder. Choose another one.');
+    }
+    location.set(raw);
+    res.json({ location: location.get() });
   });
 
   router.get('/export', (req, res) => {

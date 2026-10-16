@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import { startServer } from '../server/index.js';
 import { initUpdater } from './updater.js';
 
@@ -12,16 +12,24 @@ const ROOT = path.resolve(HERE, '..');
 // survives restarts. If it's taken, the server tries the next few ports.
 const PREFERRED_PORT = 47615;
 
-// Installed app: data in the user's app-data folder. `npm run desktop` while developing:
-// the project's data/ folder, the same library as `npm start`. WORDCOLLECTOR_DATA_DIR
-// overrides both (handy for testing with a throwaway library).
-// With the override, Electron's own files (window state, browser storage, caches) go there
-// too, so a test run never touches the real app-data folder or the library in it.
-if (process.env.WORDCOLLECTOR_DATA_DIR) {
-  app.setPath('userData', path.join(process.env.WORDCOLLECTOR_DATA_DIR, 'electron'));
+// Where things live:
+//   installed app      library + Electron files in %APPDATA%\Word Collector,
+//                      automatic backups in Documents\Word Collector Backups
+//   npm run desktop    library in the project's data/ (same as `npm start`), Electron files
+//                      in %APPDATA%\Word Collector (dev), backups in data/backups
+//   WORDCOLLECTOR_DATA_DIR  everything in that folder (for tests)
+// So development and test runs never touch the installed app's library, window state,
+// browser storage or backups, and don't block it from starting.
+const TEST_DIR = process.env.WORDCOLLECTOR_DATA_DIR;
+if (TEST_DIR) {
+  app.setPath('userData', path.join(TEST_DIR, 'electron'));
+} else if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'Word Collector (dev)'));
 }
-const dataDir = process.env.WORDCOLLECTOR_DATA_DIR
-  || (app.isPackaged ? app.getPath('userData') : path.join(ROOT, 'data'));
+const dataDir = TEST_DIR || (app.isPackaged ? app.getPath('userData') : path.join(ROOT, 'data'));
+const backupDir = app.isPackaged && !TEST_DIR
+  ? path.join(app.getPath('documents'), 'Word Collector Backups')
+  : path.join(dataDir, 'backups');
 const windowStateFile = path.join(app.getPath('userData'), 'window-state.json');
 
 let mainWindow = null;
@@ -58,8 +66,31 @@ function saveWindowState(win) {
 
 const isExternal = (url) => /^https?:\/\//i.test(url) && !url.startsWith(serverUrl);
 
+// Settings → Backups: pick a folder, or open the backup folder in Explorer.
+ipcMain.handle('backups:choose-folder', async (_event, current) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a folder for automatic backups',
+    defaultPath: current || app.getPath('documents'),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('backups:open-folder', async (_event, folder) => {
+  if (typeof folder !== 'string' || !fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) return false;
+  return (await shell.openPath(folder)) === '';
+});
+
 async function start() {
-  const { url } = await startServer({ port: PREFERRED_PORT, dataDir });
+  let url;
+  try {
+    ({ url } = await startServer({ port: PREFERRED_PORT, dataDir, backupDir }));
+  } catch (err) {
+    // E.g. an upgrade of the library failed. A copy taken just before is in the backups.
+    dialog.showErrorBox('Word Collector couldn’t open your library',
+      `${err.message}\n\nYour library hasn’t been changed. Backups are in:\n${backupDir}`);
+    app.quit();
+    return;
+  }
   serverUrl = url;
 
   const state = readWindowState();
