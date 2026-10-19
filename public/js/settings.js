@@ -12,7 +12,14 @@ export const DEFAULTS = {
   favFirst: false,
   kind: '',
   aiProvider: 'groq',
+  // Recent searches, newest first (see history.js).
+  searchHistory: [],
+  lookupHistory: [],
+  finderHistory: [],
 };
+
+// What "Reset to defaults" resets; list choices, the AI provider and history stay.
+const APPEARANCE = ['theme', 'accent', 'font', 'fontSize', 'density'];
 
 const ACCENTS = [
   ['Terracotta', '#C96442'],
@@ -102,11 +109,28 @@ dialog.querySelectorAll('.segmented').forEach((group) => {
 
 fontSize.addEventListener('input', () => setSettings({ fontSize: Number(fontSize.value) }));
 document.getElementById('settings-reset').addEventListener('click', () => {
-  // Reset covers appearance only; list choices and the AI provider stay.
-  const { sort, favFirst, kind, aiProvider } = current;
-  setSettings({ ...DEFAULTS, sort, favFirst, kind, aiProvider });
+  setSettings(Object.fromEntries(APPEARANCE.map((key) => [key, DEFAULTS[key]])));
 });
-document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
+
+export function openSettings() {
+  if (!dialog.open) dialog.showModal();
+}
+document.getElementById('open-settings').addEventListener('click', openSettings);
+
+// Clicking outside the Settings window (on the dimmed backdrop) closes it. Both the press
+// and the release must be outside, so selecting text and dragging out of the window
+// doesn't close it. Clicks on the dialog's own scrollbar also target the dialog, so the
+// position is checked rather than just the target.
+const outside = (e) => {
+  const box = dialog.getBoundingClientRect();
+  return e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom;
+};
+let pressedOutside = false;
+dialog.addEventListener('pointerdown', (e) => { pressedOutside = e.target === dialog && outside(e); });
+dialog.addEventListener('click', (e) => {
+  if (pressedOutside && e.target === dialog && outside(e)) dialog.close();
+  pressedOutside = false;
+});
 
 function syncControls() {
   dialog.querySelectorAll('.segmented').forEach((group) => {

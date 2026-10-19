@@ -132,59 +132,110 @@ async function removeSaved(item) {
   }
 }
 
-// The Save button and, once saved, a note that saves itself as you type.
-function saveBlock() {
+// Where the Save toggle and the note go in the comparison; filled by showSavedState().
+let toggleSlot = null;
+let noteSlot = null;
+
+function showSavedState({ editNote = false } = {}) {
+  fill(toggleSlot, saveToggle());
+  fill(noteSlot, result.saved && noteBlock({ editing: editNote }));
+}
+
+// "Save comparison", or once saved, a pressed "Saved" button that removes it again.
+function saveToggle() {
   const { left, right } = result;
-  const box = el('div', { class: 'save-block' });
   if (!result.saved) {
-    box.append(el('button', {
-      class: 'btn small', type: 'button',
+    return el('button', {
+      class: 'btn small save-toggle', type: 'button', 'aria-pressed': 'false',
       onclick: async () => {
         try {
           result.saved = await api.saveComparison(left.term, right.term);
-          const next = saveBlock();
-          box.replaceWith(next);
-          next.querySelector('textarea')?.focus();
+          showSavedState();
+          toggleSlot.querySelector('button')?.focus();
           loadSaved();
         } catch (err) {
           toast(err.message);
         }
       },
-    }, icon('bookmark'), 'Save comparison'));
-    return box;
+    }, icon('bookmark'), 'Save comparison');
+  }
+  const { id, note } = result.saved;
+  return el('button', {
+    class: 'btn small save-toggle', type: 'button', 'aria-pressed': 'true',
+    title: 'Saved. Click to remove it from Saved.',
+    onclick: async () => {
+      if (note && !confirm('Remove this comparison and your note from Saved?')) return;
+      await removeSaved({ id, term_a: left.term, term_b: right.term });
+      if (result && !result.saved) showSavedState();
+    },
+  }, icon('bookmark'), 'Saved');
+}
+
+// Your note on a saved comparison: an "Add a note" button, the note itself (click to edit),
+// or the editor, which saves as you type and goes back to the note when you leave it.
+function noteBlock({ editing }) {
+  const { id, note = '' } = result.saved;
+  const edit = () => {
+    fill(noteSlot, noteBlock({ editing: true }));
+    const area = noteSlot.querySelector('textarea');
+    area.focus();
+    area.setSelectionRange(area.value.length, area.value.length);
+  };
+  if (!editing && !note) {
+    return el('button', { class: 'note-add', type: 'button', onclick: edit }, icon('pencil'), 'Add a note');
+  }
+  if (!editing) {
+    return el('figure', { class: 'cmp-note' },
+      el('figcaption', {}, 'Your note',
+        el('button', {
+          class: 'btn ghost small icon-only', type: 'button', title: 'Edit note', 'aria-label': 'Edit note', onclick: edit,
+        }, icon('pencil'))),
+      el('p', { class: 'cmp-note-text', title: 'Click to edit', onclick: edit }, note));
   }
 
-  const status = el('span', { class: 'notes-status' });
-  const id = result.saved.id;
-  const save = debounce(async (note) => {
-    if (note === result?.saved?.note) return;
+  const status = el('span', { class: 'notes-status', role: 'status' });
+  let lastSaved = note;
+  const save = debounce(async (text) => {
+    if (text.trim() === lastSaved.trim()) return;
+    lastSaved = text;
     status.textContent = 'Saving…';
     try {
-      const updated = await api.updateSavedComparison(id, note);
-      if (result?.saved?.id === id) result.saved = updated;
-      status.textContent = 'Note saved';
+      const updated = await api.updateSavedComparison(id, text);
+      if (result?.saved?.id === id) result.saved = { ...updated, note: result.saved.note };
+      status.textContent = 'Saved';
       loadSaved();
     } catch (err) {
+      lastSaved = note;
       status.textContent = 'Not saved';
       toast(err.message);
     }
   }, 700);
-  const note = el('textarea', {
-    class: 'field', rows: 2, maxlength: 2000, value: result.saved.note,
-    placeholder: 'Your note: why these two, where you mixed them up…', 'aria-label': 'Note for this comparison',
-    oninput: () => { status.textContent = ''; save(note.value); },
-    onblur: () => save.flush(note.value),
+  // Back to showing the note; the last change is saved straight away.
+  const finish = () => {
+    if (!area.isConnected) return;
+    save.flush(area.value);
+    if (result?.saved?.id === id) {
+      result.saved = { ...result.saved, note: area.value.trim() };
+      fill(noteSlot, noteBlock({ editing: false }));
+    }
+  };
+  const area = el('textarea', {
+    class: 'field', rows: 3, maxlength: 2000, value: note,
+    placeholder: 'Why these two, where you mixed them up, a way to remember the difference…',
+    'aria-label': 'Note for this comparison',
+    oninput: () => { status.textContent = ''; save(area.value); },
+    onblur: finish,
+    onkeydown: (e) => {
+      // Esc finishes the note instead of closing Compare.
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(); }
+    },
   });
-  box.append(
-    el('div', { class: 'save-row' },
-      el('span', { class: 'saved-flag', style: '--bookmark-fill: currentColor' }, icon('bookmark'), 'Saved'),
-      status,
-      el('button', {
-        class: 'link-button', type: 'button',
-        onclick: () => removeSaved({ id, term_a: left.term, term_b: right.term }).then(() => render()),
-      }, 'Remove from saved')),
-    el('label', { class: 'save-note' }, note));
-  return box;
+  return el('figure', { class: 'cmp-note editing' },
+    el('figcaption', {}, 'Your note', status),
+    area,
+    el('div', { class: 'cmp-note-foot' },
+      el('span', { class: 'hint' }, 'Saves as you type'),
+      el('button', { class: 'btn small', type: 'button', onclick: finish }, 'Done')));
 }
 
 // ----- Comparing -----
@@ -308,11 +359,15 @@ function side(profile, which) {
 function render() {
   const { left, right } = result;
   const bothFound = (left.found || left.inLibrary) && (right.found || right.inLibrary);
+  toggleSlot = el('div', { class: 'save-slot' });
+  noteSlot = el('div', { class: 'note-slot' });
+  showSavedState();
   body.replaceChildren(el('div', { class: 'overlay-content wide' },
     el('section', { class: 'difference' },
       el('div', { class: 'difference-head' },
         el('h3', {}, `How “${left.term}” and “${right.term}” differ`),
-        saveBlock()),
+        toggleSlot),
+      noteSlot,
       bothFound && relationBadges(),
       bothFound && result.discussion && discussion(result.discussion, { emphasize: [left.term, right.term] }),
       bothFound && !result.discussion && el('p', { class: 'hint' },

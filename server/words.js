@@ -16,6 +16,16 @@ const SORTS = {
 
 // Fields PATCH /api/words/:id may change, besides tags.
 const EDITABLE = ['notes', 'favorite', 'primary_pos', 'found_title', 'found_author', 'found_page'];
+// "Where I found it", which can also be set on several words at once.
+export const FOUND_FIELDS = ['found_title', 'found_author', 'found_page'];
+
+// A word's tags after a bulk edit: `drop` (lowercase names) removed, then `add` appended
+// unless already there in any capitalization.
+export function bulkTags(current, add, drop) {
+  const kept = current.filter((t) => !drop.has(t.toLowerCase()));
+  const have = new Set(kept.map((t) => t.toLowerCase()));
+  return [...kept, ...add.filter((t) => !have.has(t.toLowerCase()))];
+}
 
 const now = () => new Date().toISOString();
 
@@ -91,7 +101,8 @@ export function createWordStore(db) {
       .filter(Boolean)
       .join(', ');
     const rows = db.all(
-      `SELECT w.id, w.term, w.kind, w.favorite, w.primary_pos, w.created_at, w.found_title,
+      `SELECT w.id, w.term, w.kind, w.favorite, w.primary_pos, w.created_at,
+              w.found_title, w.found_author, w.found_page,
               (SELECT d.text FROM definitions d WHERE d.word_id = w.id
                 ORDER BY d.position, d.id LIMIT 1) AS first_definition,
               (SELECT json_group_array(name) FROM (
@@ -261,6 +272,23 @@ export function createWordStore(db) {
       db.run('UPDATE words SET updated_at = $ts WHERE id = $id', { $id: id, $ts: now() });
     });
     return get(id);
+  }
+
+  // The same change to several words at once: tags added and removed, and any "where I
+  // found it" fields given (FOUND_FIELDS; '' clears one). Each word keeps its other tags.
+  function bulkUpdate(ids, { addTags = [], removeTags = [], fields = {} }) {
+    db.transaction(() => {
+      const drop = new Set(removeTags.map((t) => t.toLowerCase()));
+      for (const id of ids) {
+        for (const field of FOUND_FIELDS) {
+          if (fields[field] === undefined) continue;
+          db.run(`UPDATE words SET ${field} = $v WHERE id = $id`, { $id: id, $v: fields[field] });
+        }
+        if (addTags.length || removeTags.length) writeTags(id, bulkTags(tagsFor(id), addTags, drop));
+        db.run('UPDATE words SET updated_at = $ts WHERE id = $id', { $id: id, $ts: now() });
+      }
+    });
+    return ids.length;
   }
 
   function remove(id) {
@@ -528,7 +556,7 @@ export function createWordStore(db) {
   }
 
   return {
-    list, get, findByTerm, create, refresh, update, remove,
+    list, get, findByTerm, create, refresh, update, bulkUpdate, remove,
     definitionIds, reorder, getDefinition, addUserDefinition, updateUserDefinition, removeDefinition,
     listTags, reviewBatch, recordReview, exportAll, importAll,
     getExplanation, saveExplanation, listSavedComparisons, getSavedComparison, findSavedComparison,

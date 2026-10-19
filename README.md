@@ -7,17 +7,19 @@ The point of this program is to be able to launch a program that can store words
 - **Add a word or phrase** and its definitions fill in automatically from the Merriam-Webster Collegiate Dictionary, with example sentences, pronunciation audio, etymology and the date of first known use. The add dialog shows what was found before you save, and lets you add notes, where you found it and tags right away.
 - **Choose parts of speech**: for words like "base" (noun, verb and adjective), tick only the ones you want to keep. You can change the choice later from the word's panel; your own definitions are never removed.
 - **Phrases** ("break the ice", "piece of cake") live in the same library, with a Words / Phrases filter and their own review option.
-- **Dictionary** (`d`): look up any word or phrase without saving it, then add it, open it if it's already saved, or compare it.
+- **Dictionary** (`d`): look up any word or phrase without saving it, then add it, open it if it's already saved, or compare it. Your recent lookups are kept.
+- **Find a word** (`f`): describe a meaning ("getting something done quickly") and get words for it (*expedite*, *hasten*, *in no time*…), or type a word that doesn't exist ("habitualize") to find the real one (*habituate*, *make a habit of*). Each suggestion has a short meaning and an example, and can be looked up or added. Uses the same optional AI key as Compare (see below). When the Dictionary doesn't know a word, **Find the word you meant** asks the same question.
 - **Compare** (`c`): two words or phrases side by side, with shared synonyms highlighted and Merriam-Webster's synonym discussion when it covers the pair. With a free Groq key or an Anthropic key (optional, see below), **Explain the difference with AI** writes a short explanation; each one is kept so it's only written once. **Save comparison** keeps a pair, with your own note, in the **Saved** tab.
 - **Thesaurus**: synonyms and antonyms from the Merriam-Webster Collegiate Thesaurus. Long lists are collapsed behind "Show all". Click one to open it, or to add it if it isn't in your library yet.
 - **Words not in any dictionary** can still be saved. Merriam-Webster's "Did you mean…?" suggestions are shown when it has them.
 - **One ordered list of definitions**: Merriam-Webster text is read-only, and your own definitions can be added, edited and deleted. Reorder them by dragging, with the arrow buttons, or with **Set as main**. The top definition is the one shown on the card. **Refresh definitions** keeps your order.
 - **Where I found it**: title, author and page number for each word.
 - **Tags**: add tags to words and filter the library by tag.
+- **Edit several words at once**: choose **Select** above the list (or Ctrl-click a word), pick words (Shift-click selects a range, Ctrl+A selects everything shown), then **Edit tags & source…** to add or remove tags and set where you found them, for all of them in one go. Only what you change is applied.
 - **Notes** (they save automatically) and **favorites**.
 - **Flashcard review**: see a word, recall its meaning, reveal the definition and mark whether you knew it. Words you miss come back sooner. You can review everything, words or phrases only, favorites, or one tag.
 - **Automatic backups**: a full copy of the library is saved once a day and before every app upgrade, and any of them can be restored from **Settings → Backups** (the current library is backed up first, so a restore can be undone). You can also export the library as JSON (which can be imported again, including saved comparisons and AI explanations) or as a CSV spreadsheet.
-- **Sorting**: newest/oldest, A→Z/Z→A, or grouped by part of speech, with an optional "Favorites first" toggle. Search covers words, notes, titles and authors.
+- **Sorting**: newest/oldest, A→Z/Z→A, or grouped by part of speech, with an optional "Favorites first" toggle. Search covers words, notes, titles and authors, and your recent searches drop down when you click into the empty search box (or press ↓).
 - **Appearance**: light, dark or system theme; accent color; serif, sans or mono font; text size; card or compact layout.
 
 ## Install (Windows)
@@ -48,14 +50,14 @@ npm run desktop    # the desktop app, in its own window
 
 Alternatively, copy `.env.example` to `.env` and put the keys there. A key saved in the app takes priority over `.env`. Keys are never sent to the browser or included in exports, and `.env` is git-ignored.
 
-### AI explanations (optional)
+### AI explanations and Find a word (optional)
 
-**Explain the difference with AI** in Compare can use either of two providers. Choose one in **Settings → AI explanations**. If the chosen one has no key, the other is used.
+**Explain the difference with AI** in Compare, and **Find a word**, can use either of two providers. Choose one in **Settings → AI explanations**. If the chosen one has no key, the other is used.
 
 - **Groq (free)**: create a key at [console.groq.com/keys](https://console.groq.com/keys). No card is needed, and the free plan allows roughly 1,000 explanations a day. It runs the open model `openai/gpt-oss-120b`. Groq retires models from time to time; if explanations start failing with a "no longer offers this model" message, update the app, or set `GROQ_MODEL` in `.env` to a current model from [console.groq.com/docs/models](https://console.groq.com/docs/models).
 - **Claude (paid)**: create a key at [console.anthropic.com](https://console.anthropic.com/settings/keys). Each new explanation uses Claude Opus 5.5 and costs roughly 1–2 cents, billed to that key.
 
-Keys can also go in `.env` as `GROQ_API_KEY` / `ANTHROPIC_API_KEY`. Explanations are kept per pair, so reopening one never calls the AI again.
+Keys can also go in `.env` as `GROQ_API_KEY` / `ANTHROPIC_API_KEY`. Explanations are kept per pair, so reopening one never calls the AI again. Find a word answers are kept until the app is closed, so going back to a recent search is free; with Claude, each new search costs about as much as an explanation.
 
 Without Merriam-Webster keys the app still runs, but no definitions or synonyms are filled in. You can still save words and add your own definitions. If a lookup fails (for example, while you're offline), open the word later and use **Refresh definitions**.
 
@@ -68,9 +70,11 @@ The easiest way to share is the installer: send people the [latest release page]
 - `n` adds a word or phrase
 - `d` opens the Dictionary
 - `c` opens Compare
-- `/` searches
+- `f` opens Find a word
+- `s` opens Settings (clicking outside the Settings window also closes it)
+- `/` searches; `↓` in a search box shows recent searches
 - `r` starts a review
-- `Esc` closes the word panel, a dialog, the Dictionary, Compare or the review
+- `Esc` closes the word panel, a dialog, the Dictionary, Compare, Find a word or the review, and ends selecting words
 - In review: `Space` reveals, `←` didn't know, `→` knew it
 
 ## Project layout
@@ -80,7 +84,7 @@ server/
   index.js            Express server; exports startServer({ port, dataDir })
   db.js               SQLite (sql.js, WebAssembly — no native build step)
   words.js            Library queries
-  ai.js               Optional AI explanations for Compare (Anthropic SDK)
+  ai.js               Optional AI: explanations for Compare, suggestions for Find a word
   backup.js           Export (JSON/CSV) and import validation
   routes/api.js       REST API
   lookup/             Merriam-Webster dictionary + thesaurus clients and markup cleanup

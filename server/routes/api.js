@@ -3,17 +3,28 @@ import path from 'node:path';
 import express from 'express';
 import { lookupWord, clearLookupCache, kindOf } from '../lookup/index.js';
 import { testKey } from '../lookup/merriamWebster.js';
-import { USER_SOURCE, MAX_TAGS_PER_WORD, MAX_TAG_LENGTH, normalizePosFilter } from '../words.js';
+import {
+  USER_SOURCE, MAX_TAGS_PER_WORD, MAX_TAG_LENGTH, FOUND_FIELDS, normalizePosFilter, bulkTags,
+} from '../words.js';
 import { toBackup, toCsv, parseBackup, parseComparisons, BackupError } from '../backup.js';
-import { explainDifference, AI_PROVIDERS } from '../ai.js';
+import { explainDifference, suggestWords, AI_PROVIDERS } from '../ai.js';
 import { BackupError as RestoreError } from '../backups.js';
 import { LibraryFileError } from '../db.js';
 
 const MAX_TERM = 100;
 const MAX_TEXT = 5000;
-const SETTINGS_KEYS = new Set(['theme', 'accent', 'font', 'fontSize', 'density', 'sort', 'favFirst', 'kind', 'aiProvider']);
+// Recent searches (library, Dictionary, Find a word): lists of strings, newest first.
+const HISTORY_KEYS = new Set(['searchHistory', 'lookupHistory', 'finderHistory']);
+const MAX_HISTORY = 20;
+const SETTINGS_KEYS = new Set([
+  'theme', 'accent', 'font', 'fontSize', 'density', 'sort', 'favFirst', 'kind', 'aiProvider', ...HISTORY_KEYS,
+]);
 const MAX_NOTE = 2000;
 const KINDS = new Set(['word', 'phrase']);
+const MAX_BULK = 10_000;
+const MAX_QUERY = 200;
+const SUGGEST_CACHE_MAX = 100;
+const FOUND_LIMITS = { found_title: ['Title', 300], found_author: ['Author', 200], found_page: ['Page', 40] };
 
 // API keys: saved in the app's settings table (never sent to the browser), else .env.
 // Each is checked with its service before it's saved.
@@ -95,6 +106,12 @@ function cleanPartsOfSpeech(raw) {
 }
 
 const uniqueValues = (items) => [...new Map(items.map((r) => [r.value.toLowerCase(), r.value])).values()];
+
+function cleanSetting(key, value) {
+  if (!HISTORY_KEYS.has(key)) return value;
+  return (Array.isArray(value) ? value : [])
+    .map((v) => String(v ?? '').trim().slice(0, MAX_QUERY)).filter(Boolean).slice(0, MAX_HISTORY);
+}
 
 export function createApiRouter({ words, settings, db, backups, location }) {
   const router = express.Router();
@@ -180,6 +197,33 @@ export function createApiRouter({ words, settings, db, backups, location }) {
     extras.posFilter = normalizePosFilter(chosen, lookup.partsOfSpeech);
     res.status(201).json({ ...words.create(term, kindOf(term), lookup, extras), unavailable: lookup.unavailable });
   }));
+
+  // Edits several words at once: { ids, add_tags, remove_tags, found_title, found_author,
+  // found_page }. A "where I found it" field left out is unchanged; '' clears it.
+  router.post('/words/bulk-edit', (req, res) => {
+    const body = req.body ?? {};
+    const ids = body.ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > MAX_BULK || !ids.every(Number.isInteger)) {
+      throw new HttpError(400, 'Choose the words to change');
+    }
+    const addTags = cleanTags(body.add_tags) ?? [];
+    const removeTags = cleanTags(body.remove_tags) ?? [];
+    const fields = Object.fromEntries(FOUND_FIELDS.map((field) => {
+      const [label, max] = FOUND_LIMITS[field];
+      return [field, cleanText(body[field], label, { max })];
+    }));
+    const unique = [...new Set(ids)];
+    const library = new Map(words.list().map((w) => [w.id, w]));
+    const drop = new Set(removeTags.map((t) => t.toLowerCase()));
+    for (const id of unique) {
+      const word = library.get(id);
+      if (!word) throw new HttpError(404, 'One of the selected words is no longer in your library');
+      if (bulkTags(word.tags, addTags, drop).length > MAX_TAGS_PER_WORD) {
+        throw new HttpError(400, `“${word.term}” would have more than ${MAX_TAGS_PER_WORD} tags`);
+      }
+    }
+    res.json({ updated: words.bulkUpdate(unique, { addTags, removeTags, fields }) });
+  });
 
   router.get('/words/:id', (req, res) => res.json(requireWord(req)));
 
@@ -347,6 +391,53 @@ export function createApiRouter({ words, settings, db, backups, location }) {
     res.json(words.saveExplanation(left.term, right.term, text, model, ai.provider));
   }));
 
+  // ----- Find a word -----
+
+  router.get('/ai', (req, res) => res.json(publicAi(currentAi())));
+
+  // For a single typed word, what Merriam-Webster says about it, so the AI knows whether
+  // the word exists. Null when there's nothing to go on (a phrase, no key, offline).
+  async function dictionaryNote(query) {
+    if (/\s/.test(query)) return null;
+    let lookup;
+    try {
+      lookup = await lookupWord(query, { keys: currentKeys() });
+    } catch {
+      return null;
+    }
+    const mw = lookup.sources[0];
+    if (mw.status === 'found') {
+      const def = mw.definitions[0];
+      return `Merriam-Webster has an entry for "${query}"${def ? ` (${def.part_of_speech ? `${def.part_of_speech}: ` : ''}${def.text})` : ''}.`;
+    }
+    if (mw.status !== 'not_found') return null;
+    const spelling = lookup.suggestions?.length ? ` Its spelling suggestions: ${lookup.suggestions.join(', ')}.` : '';
+    return `Merriam-Webster has no entry for "${query}".${spelling}`;
+  }
+
+  // Answers are kept for this session: asking again (or going back to a recent search)
+  // doesn't call the AI again.
+  const suggestCache = new Map();
+
+  // Words for a description ("getting something done quickly") or for a word that doesn't
+  // exist ("habitualize").
+  router.post('/suggest', wrap(async (req, res) => {
+    const query = cleanText(req.body?.query, 'Description', { required: true, max: MAX_QUERY }).replace(/\s+/g, ' ');
+    const ai = currentAi();
+    if (!ai.available) throw new HttpError(400, 'Add a free Groq API key in Settings to find words with AI.');
+    const cacheKey = `${ai.provider}\n${query.toLowerCase()}`;
+    let answer = suggestCache.get(cacheKey);
+    if (!answer) {
+      answer = await suggestWords(ai.provider, ai.apiKey, query, await dictionaryNote(query));
+      suggestCache.set(cacheKey, answer);
+      if (suggestCache.size > SUGGEST_CACHE_MAX) suggestCache.delete(suggestCache.keys().next().value);
+    }
+    res.json({
+      query, note: answer.note, model: answer.model, provider: ai.provider,
+      suggestions: answer.suggestions.map((s) => ({ ...s, id: words.findByTerm(s.word)?.id ?? null })),
+    });
+  }));
+
   // ----- Saved comparisons -----
 
   const requireSaved = (req) => {
@@ -468,7 +559,8 @@ export function createApiRouter({ words, settings, db, backups, location }) {
 
   router.put('/settings', (req, res) => {
     const values = Object.fromEntries(
-      Object.entries(req.body ?? {}).filter(([key]) => SETTINGS_KEYS.has(key)),
+      Object.entries(req.body ?? {}).filter(([key]) => SETTINGS_KEYS.has(key))
+        .map(([key, value]) => [key, cleanSetting(key, value)]),
     );
     settings.merge(values);
     res.json(Object.fromEntries(Object.entries(settings.all()).filter(([key]) => SETTINGS_KEYS.has(key))));

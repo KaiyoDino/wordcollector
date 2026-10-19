@@ -1,11 +1,13 @@
 // Full-screen overlays (Dictionary, Compare): open/close, Esc to close, focus returns to
 // whatever was focused before, and the page behind doesn't scroll.
 const stack = [];
+const BASE_Z = 40;
 
 export function openOverlay(node, { focus } = {}) {
-  if (!stack.some((entry) => entry.node === node)) {
-    stack.push({ node, returnFocus: document.activeElement });
-  }
+  // An overlay opened from another one (Dictionary from Find a word) goes on top of it.
+  const i = stack.findIndex((entry) => entry.node === node);
+  stack.push(i === -1 ? { node, returnFocus: document.activeElement } : stack.splice(i, 1)[0]);
+  stack.forEach((entry, index) => { entry.node.style.zIndex = String(BASE_Z + index); });
   node.hidden = false;
   node.classList.add('open');
   document.body.classList.add('no-scroll');

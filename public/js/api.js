@@ -35,6 +35,10 @@ export const api = {
   updateSavedComparison: (id, note) => request('PATCH', `/saved-comparisons/${id}`, { note }),
   removeSavedComparison: (id) => request('DELETE', `/saved-comparisons/${id}`),
   updateWord: (id, changes) => request('PATCH', `/words/${id}`, changes),
+  // changes: { ids, add_tags, remove_tags, found_title?, found_author?, found_page? }
+  bulkEditWords: (changes) => request('POST', '/words/bulk-edit', changes),
+  getAi: () => request('GET', '/ai'),
+  suggest: (query) => request('POST', '/suggest', { query }),
   deleteWord: (id) => request('DELETE', `/words/${id}`),
   refreshWord: (id) => request('POST', `/words/${id}/refresh`),
   addDefinition: (id, def) => request('POST', `/words/${id}/definitions`, def),

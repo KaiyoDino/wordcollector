@@ -22,48 +22,62 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">W</span>
-      <h1>Word Collector</h1>
+    <!-- The app: tools that open their own screens, then Settings and Add. -->
+    <div class="topbar-row">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">W</span>
+        <h1>Word Collector</h1>
+      </div>
+      <nav class="tools" aria-label="Tools">
+        <button id="open-lookup" class="btn ghost labeled" type="button" title="Look up any word (D)">
+          <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>Dictionary</span>
+        </button>
+        <button id="open-finder" class="btn ghost labeled" type="button" title="Find a word for a meaning (F)">
+          <svg class="icon" aria-hidden="true"><use href="#i-bulb"/></svg><span>Find a word</span>
+        </button>
+        <button id="open-compare" class="btn ghost labeled" type="button" title="Compare two words (C)">
+          <svg class="icon" aria-hidden="true"><use href="#i-compare"/></svg><span>Compare</span>
+        </button>
+        <button id="open-review" class="btn ghost labeled" type="button" title="Review with flashcards (R)">
+          <svg class="icon" aria-hidden="true"><use href="#i-cards"/></svg><span>Review</span>
+        </button>
+      </nav>
+      <div class="app-actions">
+        <button id="open-settings" class="btn ghost icon-only" type="button" title="Settings (S)" aria-label="Settings">
+          <svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg>
+        </button>
+        <button id="open-add" class="btn primary" type="button" title="Add a word or phrase (N)">
+          <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>Add word</span>
+        </button>
+      </div>
     </div>
-    <div class="toolbar">
+    <!-- Your library: search and the filters for the list below. -->
+    <div class="library-bar" role="group" aria-label="Search and filter your library">
       <label class="search">
         <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
         <input id="search" type="search" placeholder="Search your library" aria-label="Search words, phrases and notes" autocomplete="off">
+        <kbd class="search-key" aria-hidden="true">/</kbd>
       </label>
-      <select id="sort" aria-label="Sort words">
-        <option value="date">Newest first</option>
-        <option value="date_asc">Oldest first</option>
-        <option value="alpha">A → Z</option>
-        <option value="alpha_desc">Z → A</option>
-        <option value="pos">Part of speech</option>
-      </select>
-      <select id="kind-filter" aria-label="Show words, phrases or both">
-        <option value="">Words &amp; phrases</option>
-        <option value="word">Words</option>
-        <option value="phrase">Phrases</option>
-      </select>
-      <select id="tag-filter" aria-label="Filter by tag" hidden>
-        <option value="">All tags</option>
-      </select>
-      <button id="fav-first" class="btn ghost toggle" type="button" aria-pressed="false" title="Show favorites first">
-        <svg class="icon" aria-hidden="true"><use href="#i-star"/></svg><span>Favorites first</span>
-      </button>
-      <button id="open-lookup" class="btn ghost labeled" type="button" title="Dictionary lookup (D)">
-        <svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>Dictionary</span>
-      </button>
-      <button id="open-compare" class="btn ghost labeled" type="button" title="Compare two words (C)">
-        <svg class="icon" aria-hidden="true"><use href="#i-compare"/></svg><span>Compare</span>
-      </button>
-      <button id="open-review" class="btn ghost labeled" type="button" title="Review with flashcards (R)">
-        <svg class="icon" aria-hidden="true"><use href="#i-cards"/></svg><span>Review</span>
-      </button>
-      <button id="open-settings" class="btn ghost icon-only" type="button" title="Settings" aria-label="Settings">
-        <svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg>
-      </button>
-      <button id="open-add" class="btn primary" type="button">
-        <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>Add word</span>
-      </button>
+      <div class="filters">
+        <select id="kind-filter" aria-label="Show words, phrases or both">
+          <option value="">Words &amp; phrases</option>
+          <option value="word">Words</option>
+          <option value="phrase">Phrases</option>
+        </select>
+        <select id="tag-filter" aria-label="Filter by tag" hidden>
+          <option value="">All tags</option>
+        </select>
+        <select id="sort" aria-label="Sort words">
+          <option value="date">Newest first</option>
+          <option value="date_asc">Oldest first</option>
+          <option value="alpha">A → Z</option>
+          <option value="alpha_desc">Z → A</option>
+          <option value="pos">Part of speech</option>
+        </select>
+        <button id="fav-first" class="btn ghost toggle" type="button" aria-pressed="false" title="Show favorites first">
+          <svg class="icon" aria-hidden="true"><use href="#i-star"/></svg><span>Favorites first</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -74,9 +88,41 @@
   </div>
 
   <main>
-    <p id="count" class="count" aria-live="polite"></p>
+    <div class="list-head">
+      <p id="count" class="count" aria-live="polite"></p>
+      <button id="select-toggle" class="btn ghost small" type="button" hidden
+        title="Select several words to change their tags or where you found them (or Ctrl-click a word)">
+        <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><span>Select</span>
+      </button>
+    </div>
     <div id="list" class="word-list"></div>
   </main>
+
+  <!-- Several words selected -->
+  <div id="select-bar" class="select-bar" role="region" aria-label="Selected words" hidden>
+    <span id="select-count" class="select-count" aria-live="polite"></span>
+    <span class="select-hint">Shift-click selects a range</span>
+    <button id="select-all" class="btn ghost small" type="button">Select all</button>
+    <button id="select-edit" class="btn primary small" type="button" disabled>Edit tags &amp; source…</button>
+    <button id="select-done" class="btn ghost small" type="button">Done</button>
+  </div>
+
+  <!-- Edit several words -->
+  <dialog id="bulk-dialog" class="modal" aria-labelledby="bulk-title">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2 id="bulk-title">Edit words</h2>
+        <button class="btn ghost icon-only" type="button" data-close aria-label="Close">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div id="bulk-body" class="bulk-body"></div>
+      <div class="modal-foot">
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button id="bulk-apply" class="btn primary" type="button" disabled>Apply</button>
+      </div>
+    </div>
+  </dialog>
 
   <!-- Word detail drawer -->
   <aside id="drawer" class="drawer" aria-hidden="true" aria-labelledby="drawer-title">
@@ -305,6 +351,21 @@
     <div id="compare-body" class="overlay-body"></div>
   </div>
 
+  <!-- Find a word -->
+  <div id="finder" class="review overlay" role="dialog" aria-modal="true" aria-labelledby="finder-title" hidden>
+    <div class="review-top">
+      <h2 id="finder-title">Find a word</h2>
+      <form id="finder-form" class="overlay-search" role="search">
+        <input id="finder-query" class="field" type="search" placeholder="Describe it, or type a word you made up…" autocomplete="off" maxlength="200" aria-label="Describe the word you’re looking for, or type a word you made up">
+        <button class="btn primary" type="submit">Find</button>
+      </form>
+      <button class="btn ghost icon-only" type="button" data-overlay-close aria-label="Close Find a word">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="finder-body" class="overlay-body"></div>
+  </div>
+
   <div id="toast" class="toast" role="status" hidden></div>
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -327,6 +388,9 @@
       <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 8h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-compare" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h13M17 12l4 4-4 4M21 16H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+      <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2v.5h5V16c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z" fill="var(--bookmark-fill, none)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     </defs>
   </svg>

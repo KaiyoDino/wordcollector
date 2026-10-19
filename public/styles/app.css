@@ -44,37 +44,52 @@ a { color: var(--accent-strong); }
 .toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-strong); --star-fill: var(--star); }
 .toggle[aria-pressed="true"] .icon { color: var(--star); }
 
-/* Top bar */
+/* Top bar: two rows, both lined up with the word list below.
+   Row 1 is the app (brand, tools, Settings, Add); row 2 is the library (search, filters). */
 .topbar {
   position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
-  padding: 0.9rem clamp(1rem, 4vw, 2.5rem);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; align-items: center; gap: 0.6rem; }
-.brand h1 { font-size: 1.3rem; }
+.topbar-row, .library-bar {
+  max-width: 72rem; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 2.5rem);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.topbar-row { padding-top: 0.75rem; padding-bottom: 0.6rem; }
+.library-bar { padding-bottom: 0.75rem; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 0.6rem; margin-right: auto; }
+.brand h1 { font-size: 1.3rem; white-space: nowrap; }
 .brand-mark {
-  display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px;
+  display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 9px; flex: none;
   background: var(--accent); color: var(--on-accent); font-family: var(--font-serif); font-size: 1.15rem;
 }
-.toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
+.tools { display: flex; align-items: center; gap: 0.15rem; }
+/* A thin rule between the tools and Settings / Add. */
+.app-actions { display: flex; align-items: center; gap: 0.5rem; padding-left: 0.6rem; margin-left: 0.4rem; border-left: 1px solid var(--border); }
+.filters { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .search {
-  display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 12rem; max-width: 22rem;
+  display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 12rem;
   padding: 0 0.75rem; min-height: 2.4rem;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
   color: var(--text-faint);
 }
 .search:focus-within { border-color: var(--accent); }
 .search input { border: 0; outline: 0; background: transparent; width: 100%; color: var(--text); font-family: var(--font-ui); font-size: 0.9rem; }
+/* The "/" shortcut hint, shown only while the box is empty and not in use. */
+.search-key {
+  flex: none; display: grid; place-items: center; min-width: 1.4rem; height: 1.4rem; padding: 0 0.3rem;
+  border: 1px solid var(--border-strong); border-radius: 5px; font-family: var(--font-ui); font-size: 0.75rem; color: var(--text-faint);
+}
+.search:focus-within .search-key, .search input:not(:placeholder-shown) ~ .search-key { display: none; }
 select {
   min-height: 2.4rem; padding: 0 0.6rem; font-size: 0.875rem;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 
-main { max-width: 72rem; margin: 0 auto; padding: 1.5rem clamp(1rem, 4vw, 2.5rem) 4rem; }
-.count { color: var(--text-muted); font-size: 0.8rem; margin: 0 0 1rem; letter-spacing: 0.02em; }
+main { max-width: 72rem; margin: 0 auto; padding: 1.25rem clamp(1rem, 4vw, 2.5rem) 4rem; }
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 1.9rem; margin: 0 0 0.75rem; }
+.count { color: var(--text-muted); font-size: 0.8rem; margin: 0; letter-spacing: 0.02em; }
 
 /* Word list: cards (default) */
 .word-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 1rem; }
@@ -262,10 +277,6 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 }
 
 @media (max-width: 640px) {
-  .topbar { gap: 0.6rem; }
-  .toolbar { justify-content: stretch; }
-  .search { max-width: none; flex-basis: 100%; }
-  .toolbar select { flex: 1; }
   #fav-first span, #open-add span { display: none; }
   #fav-first, #open-add { width: 2.4rem; padding: 0; }
   [data-density="compact"] .word-card .term { min-width: 0; }
@@ -406,8 +417,6 @@ body.no-scroll { overflow: hidden; }
 .review-score { font-size: 1.4rem; margin: 0; }
 
 @media (max-width: 640px) {
-  #open-review span { display: none; }
-  #open-review { width: 2.4rem; padding: 0; }
   .found-grid { grid-template-columns: 1fr 1fr; }
   .found-field.found_title { grid-column: 1 / -1; }
   .def-row { grid-template-columns: auto 1fr; }
@@ -518,10 +527,22 @@ body.no-scroll { overflow: hidden; }
 .key-optional { font-style: normal; color: var(--text-faint); }
 .key-field > .hint { margin: 0.15rem 0 0; }
 
-/* Toolbar: the labeled buttons go icon-only before the bar gets crowded */
-@media (max-width: 1400px) {
-  .toolbar .labeled span { display: none; }
-  .toolbar .labeled { width: 2.4rem; padding: 0; }
+/* Top bar on narrower windows: first the search gets a line of its own (filters below it),
+   then the tools go icon-only (their names are in the tooltips), then the app name hides. */
+@media (max-width: 860px) {
+  .search { flex-basis: 100%; }
+}
+@media (max-width: 900px) {
+  .tools .labeled span { display: none; }
+  .tools .labeled { width: 2.4rem; padding: 0; }
+}
+@media (max-width: 640px) {
+  /* Fill the line, and wrap rather than cut their text off. */
+  .filters { flex: 1; }
+  .filters select { flex: 1 1 auto; }
+}
+@media (max-width: 480px) {
+  .brand h1 { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -538,10 +559,36 @@ body.no-scroll { overflow: hidden; }
 .tab-count { color: var(--text-faint); font-size: 0.8em; }
 .difference-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
 .difference-head h3 { font-size: 1.3rem; flex: 1 1 18rem; }
-.save-block { display: grid; gap: 0.4rem; flex: 0 1 22rem; }
-.save-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-.saved-flag { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--font-ui); font-size: 0.85rem; font-weight: 600; color: var(--accent-strong); }
-.save-note textarea { min-height: 3rem; font-size: 0.92rem; }
+.save-slot { flex: none; }
+.save-toggle[aria-pressed="true"] {
+  background: var(--accent-soft); border-color: transparent; color: var(--accent-strong); --bookmark-fill: currentColor;
+}
+.save-toggle[aria-pressed="true"]:hover { border-color: var(--accent); }
+/* No box of its own, so an empty slot adds no gap to the section's grid. */
+.note-slot { display: contents; }
+.note-add {
+  justify-self: start; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  padding: 0.4rem 0.75rem; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-muted); font-family: var(--font-ui); font-size: 0.85rem;
+}
+.note-add:hover { border-color: var(--accent); color: var(--accent-strong); }
+.note-add .icon { width: 0.95em; height: 0.95em; }
+.cmp-note {
+  margin: 0; padding: 0.55rem 0.6rem 0.75rem 1rem;
+  background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+.cmp-note figcaption {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 1.9rem;
+  font-family: var(--font-ui); font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--text-muted);
+}
+.cmp-note figcaption .notes-status { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.cmp-note-text { margin: 0 0.4rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.cmp-note.editing { padding-right: 0.75rem; }
+.cmp-note.editing textarea { field-sizing: content; min-height: 4.5rem; max-height: 50vh; background: var(--surface); }
+.cmp-note-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem; }
+.cmp-note-foot .hint { margin: 0; }
 .saved-heading { font-size: 1.05rem; margin: 0.5rem 0 0; }
 .saved-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
 .saved-item {
@@ -555,7 +602,10 @@ body.no-scroll { overflow: hidden; }
 }
 .saved-pair { font-size: 1.1rem; overflow-wrap: anywhere; }
 .saved-pair .vs { color: var(--text-faint); font-style: italic; font-size: 0.85em; }
-.saved-note { color: var(--text-muted); font-size: 0.9rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.saved-note {
+  color: var(--text-muted); font-size: 0.9rem; padding-left: 0.6rem; border-left: 2px solid var(--accent);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .saved-meta { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-ui); font-size: 0.75rem; color: var(--text-faint); }
 .saved-meta .badge { display: inline-flex; align-items: center; gap: 0.2rem; }
 .saved-meta .badge .icon { width: 0.8rem; height: 0.8rem; }
@@ -569,7 +619,6 @@ body.no-scroll { overflow: hidden; }
 
 @media (max-width: 760px) {
   .compare-tabs { order: 3; width: 100%; }
-  .save-block { flex-basis: 100%; }
 }
 
 /* Settings: automatic backups */
@@ -589,4 +638,103 @@ body.no-scroll { overflow: hidden; }
 @media (max-width: 520px) {
   .backup-item { grid-template-columns: 1fr auto; }
   .backup-kind { grid-column: 1; }
+}
+
+/* ----- 1.2: selecting several words, recent searches, Find a word ----- */
+
+/* Selecting words */
+.select-box {
+  display: none; place-items: center; width: 1.35rem; height: 1.35rem; flex: none;
+  border: 1.5px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: transparent;
+}
+.select-box .icon { width: 0.9rem; height: 0.9rem; }
+.word-list.selecting .select-box { display: grid; position: absolute; top: 0.95rem; right: 0.95rem; }
+.word-list.selecting .word-card .fav { display: none; }
+.word-list.selecting .word-card { user-select: none; }
+.word-card.picked { border-color: var(--accent); background: var(--accent-soft); }
+/* Badges share the selected card's tint; give them the card color so they still read as pills. */
+.word-card.picked .badge { background: var(--surface); }
+.word-card.picked .select-box { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+[data-density="compact"] .word-list.selecting .select-box { position: static; order: -1; }
+[data-density="compact"] .word-card.picked { background: var(--accent-soft); }
+
+.select-bar {
+  position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 20;
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
+  width: max-content; max-width: calc(100vw - 2rem); padding: 0.5rem 0.6rem 0.5rem 1rem;
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: var(--shadow-lg);
+  font-family: var(--font-ui);
+}
+.select-count { font-size: 0.875rem; font-weight: 600; min-width: 6.5rem; }
+.select-hint { font-size: 0.75rem; color: var(--text-faint); margin-right: 0.25rem; }
+body.has-select-bar main { padding-bottom: 7rem; }
+/* The toast shows above the bar instead of on top of it. */
+body.has-select-bar .toast { bottom: 5.5rem; }
+
+/* Editing several words */
+.bulk-body { display: grid; gap: 1.25rem; }
+.bulk-which { margin: -0.6rem 0 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.bulk-section { display: grid; gap: 0.5rem; }
+.bulk-section h3 { font-size: 1.05rem; }
+.bulk-section .hint { margin: 0; }
+.bulk-tags { display: grid; gap: 0.25rem; }
+.bulk-tags .chips-label { margin-top: 0.5rem; }
+.chip.bulk-remove { display: inline-flex; align-items: center; gap: 0.35rem; }
+.chip.bulk-remove .icon { width: 0.8rem; height: 0.8rem; }
+.chip.bulk-remove.removing { border-color: var(--danger); color: var(--danger); text-decoration: line-through; }
+/* inline-block: the struck-through tag name doesn't strike through its count. */
+.chip-count { display: inline-block; font-size: 0.72rem; color: var(--text-faint); }
+.found-field .link-button { font-size: 0.75rem; }
+
+/* Recent searches dropdown */
+.history-menu {
+  position: fixed; z-index: 70; max-width: calc(100vw - 1rem); padding: 0.35rem;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg); font-family: var(--font-ui);
+}
+.history-label { margin: 0.2rem 0.5rem 0.3rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-item {
+  display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.3rem 0.35rem 0.5rem;
+  border-radius: 6px; cursor: pointer; font-size: 0.875rem; color: var(--text);
+}
+.history-item > .icon { color: var(--text-faint); width: 0.95rem; height: 0.95rem; }
+.history-item:hover, .history-item[aria-selected="true"] { background: var(--accent-soft); }
+.history-term { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-remove {
+  display: grid; place-items: center; width: 1.5rem; height: 1.5rem; padding: 0; flex: none;
+  border: 0; border-radius: 50%; background: transparent; color: var(--text-faint); cursor: pointer; opacity: 0;
+}
+.history-item:hover .history-remove, .history-item[aria-selected="true"] .history-remove { opacity: 1; }
+.history-remove:hover { background: var(--surface-2); color: var(--text); }
+.history-remove .icon { width: 0.75rem; height: 0.75rem; }
+.history-clear { display: block; margin: 0.3rem 0.5rem 0.2rem auto; font-size: 0.75rem; color: var(--text-muted); }
+
+/* Find a word */
+.finder-intro .notice { text-align: left; margin-top: 1rem; }
+.finder-heading { font-size: 1.3rem; }
+.finder-heading em { font-style: normal; color: var(--text-muted); }
+.finder-note { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0; padding: 0.7rem 0.9rem; border-radius: var(--radius-sm); background: var(--accent-soft); }
+.finder-note .icon { color: var(--accent-strong); margin-top: 0.2rem; }
+.suggestions { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; counter-reset: suggestion; }
+.suggestion {
+  display: grid; gap: 0.25rem; padding: 0.85rem 1.1rem 0.6rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.suggestion:hover { border-color: var(--border-strong); }
+.suggestion-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+.suggestion-word {
+  padding: 0; border: 0; background: none; cursor: pointer; text-align: left; color: var(--text);
+  font-family: var(--font-body); font-size: 1.35rem; line-height: 1.25; overflow-wrap: anywhere;
+}
+.suggestion-word:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
+.suggestion-meaning { margin: 0; }
+.suggestion .example { margin-top: 0; }
+.suggestion-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.25rem 0 0 -0.6rem; }
+.find-meant { margin-top: 0.6rem; }
+.find-meant .chip { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+@media (max-width: 640px) {
+  .select-hint { display: none; }
+  #select-toggle span { display: none; }
 }

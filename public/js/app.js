@@ -1,12 +1,16 @@
 import { api } from './api.js';
 import { el, icon, debounce, toast } from './dom.js';
-import { loadSettings, getSettings, setSettings } from './settings.js';
+import { loadSettings, getSettings, setSettings, openSettings } from './settings.js';
 import { initWordView, openWord, currentWordId } from './wordView.js';
 import { initAddDialog, openAddDialog } from './addDialog.js';
 import { initReview, openReview } from './review.js';
 import { initBackup } from './backup.js';
 import { initLookupView, openLookup, noteAdded } from './lookupView.js';
 import { initCompare, openCompare, noteAddedToCompare } from './compare.js';
+import { initFinder, openFinder, noteAddedToFinder } from './finder.js';
+import { initSelection, selectionClick, syncSelection, stopSelecting } from './selection.js';
+import { initBulkEdit, openBulkEdit } from './bulkEdit.js';
+import { attachHistory, rememberSearch } from './history.js';
 import { openKeySettings } from './keys.js';
 import { closeOverlay, isOverlayOpen } from './overlay.js';
 import './desktop.js';
@@ -18,8 +22,7 @@ const sortSelect = document.getElementById('sort');
 const favFirst = document.getElementById('fav-first');
 const tagFilter = document.getElementById('tag-filter');
 const kindFilter = document.getElementById('kind-filter');
-const lookupOverlay = document.getElementById('lookup');
-const compareOverlay = document.getElementById('compare');
+const overlays = ['lookup', 'compare', 'finder'].map((id) => document.getElementById(id));
 
 const MAX_CARD_TAGS = 3;
 
@@ -88,6 +91,7 @@ function render() {
         el('h2', {}, 'Your library is empty'),
         el('p', {}, 'Add a word or phrase and its definitions will be filled in for you.'),
         el('button', { class: 'btn primary', type: 'button', onclick: () => openAddDialog() }, icon('plus'), 'Add your first word')));
+    syncSelection();
     return;
   }
 
@@ -103,17 +107,21 @@ function render() {
     nodes.push(card(word));
   }
   list.replaceChildren(...nodes);
+  syncSelection();
 }
 
 function card(word) {
+  // While selecting words, a click selects instead of opening.
+  const activate = (e) => { if (!selectionClick(word.id, e)) openWord(word.id); };
   const node = el('article', {
     class: `word-card${word.id === currentWordId() ? ' selected' : ''}`,
     tabindex: '0', role: 'button', 'aria-label': `Open ${word.term}`, dataset: { id: word.id },
-    onclick: () => openWord(word.id),
+    onclick: activate,
     onkeydown: (e) => {
-      if ((e.key === 'Enter' || e.key === ' ') && e.target === node) { e.preventDefault(); openWord(word.id); }
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === node) { e.preventDefault(); activate(e); }
     },
   },
+  el('span', { class: 'select-box', 'aria-hidden': 'true' }, icon('check')),
   el('h3', { class: 'term' }, word.term),
   word.primary_pos && el('span', { class: 'badge' }, word.primary_pos),
   // MW's part of speech for phrases already says "phrase" / "noun phrase"; don't repeat it.
@@ -154,18 +162,33 @@ favFirst.addEventListener('click', () => {
   syncToolbar();
   refreshList();
 });
-search.addEventListener('input', debounce(refreshList, 200));
+const searchNow = debounce(refreshList, 200);
+search.addEventListener('input', searchNow);
+// A search is remembered once you press Enter or move on from the field, not on every
+// letter typed.
+search.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.defaultPrevented) return;
+  searchNow.flush();
+  rememberSearch('searchHistory', search.value);
+});
+search.addEventListener('blur', () => rememberSearch('searchHistory', search.value));
+attachHistory(search, {
+  key: 'searchHistory',
+  anchor: search.closest('.search'),
+  onPick: (term) => { rememberSearch('searchHistory', term); searchNow.flush(); },
+});
 tagFilter.addEventListener('change', refreshList);
 kindFilter.addEventListener('change', () => { setSettings({ kind: kindFilter.value }); refreshList(); });
 document.getElementById('open-add').addEventListener('click', () => openAddDialog());
 document.getElementById('open-review').addEventListener('click', () => openReview());
 document.getElementById('open-lookup').addEventListener('click', () => openLookup());
 document.getElementById('open-compare').addEventListener('click', () => openCompare());
+document.getElementById('open-finder').addEventListener('click', () => openFinder());
 
-// The word panel sits beneath the Dictionary and Compare screens, so close them first.
+// The word panel sits beneath the Dictionary, Compare and Find a word screens, so close
+// them first.
 function openFromOverlay(id) {
-  closeOverlay(lookupOverlay);
-  closeOverlay(compareOverlay);
+  overlays.forEach(closeOverlay);
   openWord(id);
 }
 
@@ -183,6 +206,7 @@ function flashCard(id) {
 async function onWordAdded(word) {
   noteAdded(word);
   noteAddedToCompare(word);
+  noteAddedToFinder(word);
   await refreshList();
   flashCard(word.id);
   const unavailable = word.unavailable?.length
@@ -200,6 +224,8 @@ document.addEventListener('keydown', (e) => {
     r: () => openReview(),
     d: () => openLookup(),
     c: () => openCompare(),
+    f: () => openFinder(),
+    s: () => openSettings(),
   };
   if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
 });
@@ -220,11 +246,28 @@ const overlayHooks = {
   onOpen: openFromOverlay,
   onAdd: (term) => openAddDialog(term),
   onCompare: (term) => openCompare(term, ''),
+  onLookup: (term) => openLookup(term),
+  onFind: (term) => openFinder(term),
   onOpenKeys: (name) => openKeySettings(name),
   libraryTerms: () => libraryTerms,
 };
 initLookupView(overlayHooks);
 initCompare(overlayHooks);
+initFinder(overlayHooks);
+
+initSelection({
+  onEdit: (ids) => {
+    const chosen = new Set(ids);
+    openBulkEdit(words.filter((w) => chosen.has(w.id)));
+  },
+});
+initBulkEdit({
+  onApplied: async (ids) => {
+    stopSelecting();
+    await refreshList();
+    if (ids.includes(currentWordId())) openWord(currentWordId());
+  },
+});
 
 initAddDialog({
   onAdded: onWordAdded,

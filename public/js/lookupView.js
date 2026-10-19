@@ -4,16 +4,16 @@ import { api } from './api.js';
 import { el, icon } from './dom.js';
 import { openOverlay } from './overlay.js';
 import { renderProfile, fromLookup } from './profile.js';
+import { attachHistory, recentSearches, rememberSearch } from './history.js';
 
 const overlay = document.getElementById('lookup');
 const form = document.getElementById('lookup-form');
 const input = document.getElementById('lookup-term');
 const body = document.getElementById('lookup-body');
 
-const MAX_RECENT = 12;
+const HISTORY = 'lookupHistory';
 let hooks = {};
 let current = null;      // the profile being shown
-let recent = [];         // terms looked up this session, newest first
 let requestId = 0;
 
 export function initLookupView(callbacks) {
@@ -22,6 +22,7 @@ export function initLookupView(callbacks) {
     e.preventDefault();
     lookUp(input.value);
   });
+  attachHistory(input, { key: HISTORY, onPick: lookUp, label: 'Recent lookups' });
 }
 
 export function openLookup(term = '') {
@@ -40,6 +41,7 @@ export function noteAdded(word) {
 }
 
 function renderStart() {
+  const recent = recentSearches(HISTORY);
   body.replaceChildren(el('div', { class: 'overlay-empty' },
     el('p', {}, 'Look up any word or phrase. Nothing is saved unless you choose Add to library.'),
     recent.length > 0 && [
@@ -60,7 +62,7 @@ async function lookUp(raw) {
     if (id !== requestId) return;
     current = { ...fromLookup(result), keyProblem: result.sources.some((s) => s.status === 'disabled' || s.invalidKey),
       unavailable: result.unavailable };
-    recent = [term, ...recent.filter((t) => t.toLowerCase() !== term.toLowerCase())].slice(0, MAX_RECENT);
+    rememberSearch(HISTORY, term);
     renderResult();
   } catch (err) {
     if (id !== requestId) return;
@@ -98,7 +100,10 @@ function renderResult() {
         el('p', { class: 'chips-label' }, 'Did you mean…'),
         el('div', { class: 'chips' }, p.suggestions.map((s) =>
           el('button', { class: 'chip', type: 'button', onclick: () => lookUp(s) }, s))),
-      ]));
+      ],
+      el('div', { class: 'chips find-meant' },
+        el('button', { class: 'chip', type: 'button', onclick: () => hooks.onFind?.(p.term) },
+          icon('bulb'), 'Find the word you meant'))));
   }
   if (p.found || p.inLibrary) {
     nodes.push(actions(), renderProfile(p, {
